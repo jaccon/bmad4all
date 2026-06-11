@@ -47,6 +47,12 @@ python3 bmad_install.py --dir /projeto --modules bmm,tea --tools claude-code --y
 # Apenas detectar o projeto
 python3 bmad_install.py --detect --dir /projeto
 
+# Instalação com Gemini + GitHub Copilot + Cursor
+python3 bmad_install.py --tools gemini,github-copilot,cursor
+
+# Instalação não-interativa com Gemini
+python3 bmad_install.py --dir /projeto --modules bmm,tea --tools gemini --yes
+
 # Instalação sem Node.js
 python3 bmad_install.py --fallback --dir /projeto
 
