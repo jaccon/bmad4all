@@ -56,6 +56,12 @@ python3 bmad_install.py --detect --dir /projeto
 # Instalação com Gemini + GitHub Copilot + Cursor
 python3 bmad_install.py --tools gemini,github-copilot,cursor
 
+# Instalação para Antigravity CLI
+python3 bmad_install.py --tools antigravity
+
+# Instalação para múltiplas ferramentas incluindo Antigravity
+python3 bmad_install.py --tools antigravity,claude-code,cursor
+
 # Instalação não-interativa com Gemini
 python3 bmad_install.py --dir /projeto --modules bmm,tea --tools gemini --yes
 
@@ -92,6 +98,7 @@ python3 bmad_install.py --uninstall --dir /projeto
 - `cursor` — Cursor IDE
 - `github-copilot` — GitHub Copilot
 - `gemini` — Google Gemini CLI
+- `antigravity` — Google Antigravity CLI (`agy`)
 - `codeium` — Codeium / Windsurf
 - `codex` — Codex CLI
 
@@ -102,6 +109,12 @@ Linguagens detectadas automaticamente:
 Python, Node.js, Ruby, PHP, Java/Kotlin, Go, Rust, .NET, Elixir, Swift, C/C++, Terraform, R, Perl, Haskell, Docker.
 
 A detecção de frameworks inclui: Django, Flask, FastAPI, React, Vue, Next.js, Nuxt, Svelte, Express, Gin, Echo, Fiber, Actix, Axum, Rocket, Maven, Gradle.
+
+## Antigravity CLI
+
+O BMAD ainda não tem suporte nativo ao Antigravity CLI. O instalador faz o mapeamento automático: gera as skills via Claude Code e cria links simbólicos no diretório do Antigravity (`.agent/skills/` e `~/.gemini/antigravity/skills/`).
+
+Dentro do Antigravity, use `/skills` para listar ou digite o nome da skill (ex: `bmad-help`).
 
 ## Documentação
 

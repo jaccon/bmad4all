@@ -463,7 +463,7 @@ def interactive_install(path: str, project_info: dict) -> bool:
         log_ok(f"Módulos selecionados: {', '.join(selected_mods)}")
 
     # Tool selection
-    all_tools = ["claude-code", "cursor", "github-copilot", "gemini", "codeium", "codex"]
+    all_tools = ["claude-code", "cursor", "github-copilot", "gemini", "antigravity", "codeium", "codex"]
     suggested_tools = ["claude-code"]
     for t in ["cursor", "github-copilot"]:
         if shutil.which(t.split("/")[0]) or shutil.which(t):
@@ -472,6 +472,9 @@ def interactive_install(path: str, project_info: dict) -> bool:
     selected_tools = prompt_select(
         "Selecione as ferramentas AI para integração:", all_tools, default=suggested_tools
     )
+
+    # Antigravity não é suportado diretamente pelo BMAD; mapeia para claude-code
+    bmad_tools = ["claude-code" if t == "antigravity" else t for t in selected_tools]
 
     # Confirm
     log(f"\n{Color.BOLD}📋 Resumo da instalação:{Color.RESET}")
@@ -484,7 +487,91 @@ def interactive_install(path: str, project_info: dict) -> bool:
         log_warn("Instalação cancelada.")
         return False
 
-    return run_npx_install(path, modules=selected_mods, tools=selected_tools)
+    return run_npx_install(path, modules=selected_mods, tools=bmad_tools)
+
+
+# ─── Guia de uso ────────────────────────────────────────────────────────
+
+def print_usage_guide() -> None:
+    """Print BMAD usage guide with examples."""
+    log(f"\n{Color.BOLD}📘 Como usar o BMAD:{Color.RESET}")
+    log(f"")
+    log(f"  {Color.BOLD}1. Peça ajuda ao BMAD (recomendado):{Color.RESET}")
+    log(f"     Na sua IDE AI, digite:")
+    log(f"     {Color.MAGENTA}bmad-help{Color.RESET}")
+    log(f"     {Color.MAGENTA}bmad-help tenho uma ideia para um SaaS, por onde começo?{Color.RESET}")
+    log(f"")
+    log(f"  {Color.BOLD}2. Agentes disponíveis:{Color.RESET}")
+    log(f"     {Color.MAGENTA}bmad-agent-dev{Color.RESET}         — Desenvolvedor (implementação)")
+    log(f"     {Color.MAGENTA}bmad-agent-pm{Color.RESET}          — Product Manager (PRD, épicos)")
+    log(f"     {Color.MAGENTA}bmad-agent-architect{Color.RESET}   — Arquiteto (solução técnica)")
+    log(f"     {Color.MAGENTA}bmad-agent-analyst{Color.RESET}     — Analista (brainstorming, pesquisa)")
+    log(f"     {Color.MAGENTA}bmad-agent-ux-designer{Color.RESET} — UX Designer")
+    log(f"")
+    log(f"  {Color.BOLD}3. Fluxo completo (novo projeto):{Color.RESET}")
+    log(f"     {Color.DIM}# Chat 1:{Color.RESET} {Color.MAGENTA}bmad-prd{Color.RESET}{Color.DIM}             → PRD (requisitos){Color.RESET}")
+    log(f"     {Color.DIM}# Chat 2:{Color.RESET} {Color.MAGENTA}bmad-agent-architect{Color.RESET}{Color.DIM}  → Arquitetura{Color.RESET}")
+    log(f"     {Color.DIM}# Chat 2:{Color.RESET} {Color.MAGENTA}bmad-create-architecture{Color.RESET}")
+    log(f"     {Color.DIM}# Chat 3:{Color.RESET} {Color.MAGENTA}bmad-agent-pm{Color.RESET}{Color.DIM}        → Épicos e histórias{Color.RESET}")
+    log(f"     {Color.DIM}# Chat 4:{Color.RESET} {Color.MAGENTA}bmad-agent-dev{Color.RESET}{Color.DIM}       → Sprint planning{Color.RESET}")
+    log(f"     {Color.DIM}# Chat 5:{Color.RESET} {Color.MAGENTA}bmad-agent-dev{Color.RESET}{Color.DIM}       → Implementar história{Color.RESET}")
+    log(f"")
+    log(f"  {Color.BOLD}4. Fluxo rápido:{Color.RESET}")
+    log(f"     {Color.MAGENTA}bmad-quick-dev{Color.RESET}  — Planeja + implementa em um único workflow")
+    log(f"")
+    log(f"  📖 Documentação: https://docs.bmad-method.org")
+    log(f"  💬 Comunidade: https://discord.gg/gk8jAdXWmj")
+
+
+def print_antigravity_hint(project_path: str) -> None:
+    """Print hint for Antigravity CLI users and try to symlink skills."""
+    log(f"\n{Color.YELLOW}💡 Dica para Antigravity CLI:{Color.RESET}")
+    log(f"   O BMAD ainda não tem suporte nativo ao Antigravity.")
+    log(f"   Vou criar um link das skills para o diretório do Antigravity.\n")
+
+    source_dirs = [
+        os.path.join(project_path, ".claude", "skills"),
+        os.path.join(project_path, ".gemini", "skills"),
+        os.path.join(project_path, ".agents", "skills"),
+    ]
+
+    target_dirs = [
+        os.path.join(project_path, ".agent", "skills"),
+        os.path.expanduser("~/.gemini/antigravity/skills"),
+    ]
+
+    found = False
+    for src in source_dirs:
+        if os.path.isdir(src) and os.listdir(src):
+            found = True
+            for tgt in target_dirs:
+                try:
+                    os.makedirs(tgt, exist_ok=True)
+                    linked = 0
+                    for skill in os.listdir(src):
+                        skill_path = os.path.abspath(os.path.join(src, skill))
+                        link_path = os.path.abspath(os.path.join(tgt, skill))
+                        if os.path.exists(link_path):
+                            continue
+                        if os.path.isdir(skill_path):
+                            os.symlink(skill_path, link_path, target_is_directory=True)
+                        else:
+                            os.symlink(skill_path, link_path)
+                        linked += 1
+                    log_ok(f"{linked} skills linkadas para: {tgt}")
+                except (OSError, PermissionError) as e:
+                    log_warn(f"Não foi possível linkar para {tgt}: {e}")
+            break
+
+    if not found:
+        log_warn("Skills BMAD não encontradas. Execute a instalação primeiro.")
+        log(f"   Depois de instalar, copie manualmente:")
+        log(f"   {Color.DIM}   cp -r .claude/skills/* .agent/skills/{Color.RESET}")
+        log(f"   {Color.DIM}   ou{Color.RESET}")
+        log(f"   {Color.DIM}   cp -r .claude/skills/* ~/.gemini/antigravity/skills/{Color.RESET}")
+
+    log(f"\n   Dentro do Antigravity CLI, use {Color.MAGENTA}/skills{Color.RESET} para listar,")
+    log(f"   ou digite o nome da skill diretamente (ex: {Color.MAGENTA}bmad-help{Color.RESET}).")
 
 
 # ─── List tools ─────────────────────────────────────────────────────────
@@ -604,11 +691,16 @@ Exemplos:
         selected_mods = args.modules.split(",") if args.modules else LANG_MODULES.get(
             project_info["language"], LANG_MODULES["generic"]
         )
-        selected_tools = args.tools.split(",") if args.tools else ["claude-code"]
+        selected_tools_raw = args.tools.split(",") if args.tools else ["claude-code"]
+        # Antigravity CLI não é suportado diretamente pelo BMAD; usa claude-code como fallback
+        selected_tools = [
+            "claude-code" if t == "antigravity" else t
+            for t in selected_tools_raw
+        ]
 
         log_step(f"Projeto detectado: {project_info['label']}")
         log_step(f"Módulos: {', '.join(selected_mods)}")
-        log_step(f"Ferramentas: {', '.join(selected_tools)}")
+        log_step(f"Ferramentas: {', '.join(selected_tools_raw)}")
 
         success = run_npx_install(
             project_path,
@@ -623,34 +715,11 @@ Exemplos:
     # Interactive
     success = interactive_install(project_path, project_info)
 
+    tools_used = args.tools or ""
+    is_antigravity = "antigravity" in tools_used
+
     if success:
         log(f"\n{Color.GREEN}{Color.BOLD}✅ BMAD instalado com sucesso!{Color.RESET}")
-        log(f"\n{Color.BOLD}📘 Como usar o BMAD:{Color.RESET}")
-        log(f"")
-        log(f"  {Color.BOLD}1. Peça ajuda ao BMAD (recomendado):{Color.RESET}")
-        log(f"     Na sua IDE AI (Claude Code, Cursor, Gemini etc.), digite:")
-        log(f"     {Color.MAGENTA}bmad-help{Color.RESET}")
-        log(f"     {Color.MAGENTA}bmad-help tenho uma ideia para um SaaS, por onde começo?{Color.RESET}")
-        log(f"")
-        log(f"  {Color.BOLD}2. Liste os agentes disponíveis:{Color.RESET}")
-        log(f"     {Color.MAGENTA}bmad-agent-dev{Color.RESET}        — Desenvolvedor (implementação)")
-        log(f"     {Color.MAGENTA}bmad-agent-pm{Color.RESET}         — Product Manager (PRD, épicos)")
-        log(f"     {Color.MAGENTA}bmad-agent-architect{Color.RESET}  — Arquiteto (solução técnica)")
-        log(f"     {Color.MAGENTA}bmad-agent-analyst{Color.RESET}    — Analista (brainstorming, pesquisa)")
-        log(f"     {Color.MAGENTA}bmad-agent-ux-designer{Color.RESET} — UX Designer")
-        log(f"")
-        log(f"  {Color.BOLD}3. Fluxo completo para um novo projeto:{Color.RESET}")
-        log(f"     {Color.DIM}# Chat 1:{Color.RESET} {Color.MAGENTA}bmad-prd{Color.RESET}              — Criar PRD (requisitos)")
-        log(f"     {Color.DIM}# Chat 2:{Color.RESET} {Color.MAGENTA}bmad-agent-architect{Color.RESET}   — Carregar arquiteto")
-        log(f"     {Color.DIM}# Chat 2:{Color.RESET} {Color.MAGENTA}bmad-create-architecture{Color.RESET} — Criar arquitetura")
-        log(f"     {Color.DIM}# Chat 3:{Color.RESET} {Color.MAGENTA}bmad-agent-pm{Color.RESET}     → {Color.MAGENTA}bmad-create-epics-and-stories{Color.RESET}")
-        log(f"     {Color.DIM}# Chat 4:{Color.RESET} {Color.MAGENTA}bmad-agent-dev{Color.RESET}     → {Color.MAGENTA}bmad-sprint-planning{Color.RESET}")
-        log(f"     {Color.DIM}# Chat 5:{Color.RESET} {Color.MAGENTA}bmad-agent-dev{Color.RESET}     → {Color.MAGENTA}bmad-dev-story{Color.RESET}     — Implementar história")
-        log(f"")
-        log(f"  {Color.BOLD}4. Fluxo rápido (menos burocracia):{Color.RESET}")
-        log(f"     {Color.MAGENTA}bmad-quick-dev{Color.RESET}  — Planeja + implementa em um único workflow")
-        log(f"")
-        log(f"  📖 Documentação completa: https://docs.bmad-method.org")
     else:
         log(f"\n{Color.RED}Falha na instalação do BMAD.{Color.RESET}")
         if not gh_token:
@@ -658,6 +727,12 @@ Exemplos:
             log(f"   Exporte um token: {Color.BOLD}export GITHUB_TOKEN=seu_token{Color.RESET}")
             log(f"   Ou use {Color.BOLD}--next{Color.RESET} para pular a resolução de tags:")
             log(f"   {Color.DIM}   bmad_install.py --modules bmm,tea --tools gemini --yes --next{Color.RESET}")
+
+    print_usage_guide()
+    if is_antigravity:
+        print_antigravity_hint(project_path)
+
+    if not success:
         sys.exit(1)
 
 
