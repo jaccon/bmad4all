@@ -260,11 +260,21 @@ def check_npx() -> bool:
     return shutil.which("npx") is not None
 
 
+def check_github_token() -> str | None:
+    """Check if GITHUB_TOKEN is set (avoids API rate limiting)."""
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        token = os.environ.get("GH_TOKEN")
+    return token
+
+
 def run_npx_install(
     directory: str,
     modules: list[str] | None = None,
     tools: list[str] | None = None,
     yes: bool = False,
+    use_next: bool = False,
+    pin: str | None = None,
 ) -> bool:
     """Run the official BMAD installer via npx."""
     cmd = ["npx", BMAD_NPM, "install", "--directory", directory]
@@ -274,6 +284,12 @@ def run_npx_install(
 
     if tools:
         cmd.extend(["--tools", ",".join(tools)])
+
+    if use_next:
+        cmd.append("--all-next")
+
+    if pin:
+        cmd.extend(["--pin", pin])
 
     if yes:
         cmd.append("--yes")
@@ -510,6 +526,8 @@ Exemplos:
   {os.path.basename(sys.argv[0])} --detect                 Apenas detectar o projeto
   {os.path.basename(sys.argv[0])} --uninstall              Remover BMAD do projeto
   {os.path.basename(sys.argv[0])} --list-tools             Listar ferramentas AI suportadas
+  {os.path.basename(sys.argv[0])} --next --modules bmm     Usar branch main (sem rate limit)
+  {os.path.basename(sys.argv[0])} --pin tea=v0.2.0         Fixar versão específica
         """,
     )
 
@@ -520,6 +538,8 @@ Exemplos:
     parser.add_argument("--detect", action="store_true", help="Apenas detectar o projeto e sair")
     parser.add_argument("--uninstall", action="store_true", help="Remover BMAD do projeto")
     parser.add_argument("--list-tools", action="store_true", help="Listar ferramentas AI suportadas")
+    parser.add_argument("--next", action="store_true", help="Usar branch main dos módulos (evita resolução de tags)")
+    parser.add_argument("--pin", help="Fixar versão de um módulo (ex: tea=v0.2.0)")
     parser.add_argument("--fallback", action="store_true", help="Usar instalação alternativa (GitHub)")
 
     args = parser.parse_args()
@@ -551,9 +571,25 @@ Exemplos:
             log_ok("BMAD removido do projeto.")
         return
 
+    if args.next and not args.yes:
+        log_warn("Usando --next: módulos serão instalados da branch main.")
+        log_step("Pulando resolução de tags (útil se estiver com rate limit).")
+
+    if args.pin and not args.yes:
+        log_step(f"Versão fixada: {args.pin}")
+
     if args.fallback:
         success = install_from_github_fallback(project_path)
         sys.exit(0 if success else 1)
+
+    # Check GitHub token (rate limit)
+    gh_token = check_github_token()
+    if not gh_token:
+        if sys.stdout.isatty():
+            log_warn(
+                "GITHUB_TOKEN não definido. Limite de API: 60 req/h. "
+                "Defina GITHUB_TOKEN para 5000 req/h."
+            )
 
     # Validate Node.js for non-interactive mode
     node_ok, node_msg, _ = check_node()
@@ -575,7 +611,12 @@ Exemplos:
         log_step(f"Ferramentas: {', '.join(selected_tools)}")
 
         success = run_npx_install(
-            project_path, modules=selected_mods, tools=selected_tools, yes=True
+            project_path,
+            modules=selected_mods,
+            tools=selected_tools,
+            yes=True,
+            use_next=args.next,
+            pin=args.pin,
         )
         sys.exit(0 if success else 1)
 
@@ -590,6 +631,11 @@ Exemplos:
         log(f"   {Color.DIM}  3. Consulte a documentação: https://docs.bmad-method.org{Color.RESET}")
     else:
         log(f"\n{Color.RED}Falha na instalação do BMAD.{Color.RESET}")
+        if not gh_token:
+            log(f"\n{Color.YELLOW}💡 Dica: O erro pode ser limite de taxa da API do GitHub.{Color.RESET}")
+            log(f"   Exporte um token: {Color.BOLD}export GITHUB_TOKEN=seu_token{Color.RESET}")
+            log(f"   Ou use {Color.BOLD}--next{Color.RESET} para pular a resolução de tags:")
+            log(f"   {Color.DIM}   bmad_install.py --modules bmm,tea --tools gemini --yes --next{Color.RESET}")
         sys.exit(1)
 
 

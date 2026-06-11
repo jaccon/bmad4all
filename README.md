@@ -12,6 +12,10 @@ Detecta automaticamente o tipo de projeto, sugere módulos apropriados e configu
 
 > Sem Node.js, use `--fallback` para instalação alternativa via GitHub.
 
+> **Limite de API GitHub:** O instalador oficial faz chamadas à API do GitHub.
+> Anonimamente: 60 req/h. Defina `export GITHUB_TOKEN=seu_token` para 5000 req/h.
+> Se atingir o limite, use `--next` ou `--pin tea=<tag>` para pular a resolução de tags.
+
 ## Instalação
 
 ```bash
@@ -31,6 +35,8 @@ python3 bmad_install.py
 | `--uninstall` | Remover BMAD do projeto |
 | `--list-tools` | Listar ferramentas AI suportadas |
 | `--fallback` | Instalação alternativa via GitHub (sem Node.js) |
+| `--next` | Usar branch main dos módulos (evita resolução de tags) |
+| `--pin tea=1.0.0` | Fixar versão específica de um módulo |
 
 ## Exemplos
 
@@ -52,6 +58,16 @@ python3 bmad_install.py --tools gemini,github-copilot,cursor
 
 # Instalação não-interativa com Gemini
 python3 bmad_install.py --dir /projeto --modules bmm,tea --tools gemini --yes
+
+# Pular resolução de tags (evita rate limit da API GitHub)
+python3 bmad_install.py --modules bmm,tea --tools gemini --yes --next
+
+# Fixar versão específica de um módulo
+python3 bmad_install.py --modules bmm,tea --tools gemini --yes --pin tea=v0.2.0
+
+# Contornar rate limit com GITHUB_TOKEN
+export GITHUB_TOKEN=seu_token_github
+python3 bmad_install.py --modules bmm,tea --tools gemini --yes
 
 # Instalação sem Node.js
 python3 bmad_install.py --fallback --dir /projeto
