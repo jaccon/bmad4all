@@ -492,16 +492,9 @@ def interactive_install(path: str, project_info: dict) -> bool:
 
 # ─── Resolve customization ──────────────────────────────────────────────
 
-def resolve_skills_customization(project_path: str) -> None:
-    """Pre-resolve all skills and cache results so SKILL.md can skip the resolve step."""
-    resolve_script = os.path.join(project_path, "_bmad", "scripts", "resolve_customization.py")
-    if not os.path.isfile(resolve_script):
-        log_warn("resolve_customization.py não encontrado em _bmad/scripts/")
-        return
-
-    log(f"\n{Color.BOLD}🔧 Pré-resolvendo customizações das skills...{Color.RESET}")
-
-    skill_dirs = []
+def _find_skills(project_path: str) -> list[tuple[str, str]]:
+    """Find all skill directories across all supported tools."""
+    skills = []
     for skills_path in [
         os.path.join(project_path, ".claude", "skills"),
         os.path.join(project_path, ".gemini", "skills"),
@@ -511,93 +504,124 @@ def resolve_skills_customization(project_path: str) -> None:
         if os.path.isdir(skills_path):
             for entry in sorted(os.listdir(skills_path)):
                 skill_dir = os.path.join(skills_path, entry)
-                if os.path.isdir(skill_dir) and os.path.isfile(os.path.join(skill_dir, "customize.toml")):
-                    skill_dirs.append((entry, skill_dir))
-
-    if not skill_dirs:
-        log_warn("Nenhuma skill com customize.toml encontrada.")
-        return
-
-    resolved = 0
-    for name, skill_dir in skill_dirs:
-        cache_file = os.path.join(skill_dir, ".resolved_workflow.json")
-
-        cmd = [
-            sys.executable or "python3",
-            resolve_script,
-            "--skill", skill_dir,
-            "--key", "workflow",
-        ]
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=30
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                with open(cache_file, "w") as f:
-                    f.write(result.stdout.strip())
-                _patch_skill_md(skill_dir, cache_file)
-                log_ok(f"{name}: workflow resolvido e cache salvo")
-                resolved += 1
-            else:
-                err = result.stderr.strip() or "saída vazia"
-                log_warn(f"{name}: falha ({err})")
-        except subprocess.TimeoutExpired:
-            log_warn(f"{name}: tempo excedido")
-        except Exception as e:
-            log_warn(f"{name}: erro ({e})")
-
-    if resolved:
-        log_ok(f"{resolved}/{len(skill_dirs)} skills pré-resolvidas")
+                if os.path.isdir(skill_dir) and os.path.isfile(os.path.join(skill_dir, "SKILL.md")):
+                    skills.append((entry, skill_dir))
+    return skills
 
 
-def _patch_skill_md(skill_dir: str, cache_file: str) -> None:
-    """Embed resolved workflow JSON directly into SKILL.md to eliminate the resolve step entirely."""
+RESOLVE_COMMANDS = {
+    "resolve_customization.py": {"key": "workflow", "flag": "--skill"},
+    "resolve_config.py": {"key": None, "flag": "--project-root"},
+}
+
+
+def _find_resolve_blocks(content: str) -> list[dict]:
+    """Find all resolve blocks in SKILL.md (resolve_*.py commands)."""
+    import re
+
+    blocks = []
+    # Match: python3 {path}/resolve_<name>.py ...args
+    pattern = r"(python3\s+\S*?/(resolve_\w+\.py)\s+(.+?)(?:\n|$))"
+    for match in re.finditer(pattern, content):
+        full_cmd = match.group(1).strip()
+        script_name = match.group(2)
+        args_str = match.group(3).strip()
+
+        if script_name in RESOLVE_COMMANDS:
+            config = RESOLVE_COMMANDS[script_name]
+            blocks.append({
+                "full": full_cmd,
+                "script": script_name,
+                "args": args_str,
+                "key_flag": config["key"],
+                "dir_flag": config["flag"],
+            })
+    return blocks
+
+
+def _extract_command(block: dict, skill_dir: str, project_path: str) -> list[str] | None:
+    """Build the actual resolve command to run, replacing {skill-root} and {project-root}."""
+    cmd_str = block["full"].replace("{skill-root}", skill_dir).replace("{project-root}", project_path)
+    parts = cmd_str.split()
+    if parts[0] == "python3":
+        parts[0] = sys.executable or "python3"
+    return parts
+
+
+def _embed_resolve_result(skill_dir: str, skill_name: str, block: dict, result_json: str) -> bool:
+    """Embed the resolved JSON into SKILL.md by replacing the resolve block."""
     skill_md = os.path.join(skill_dir, "SKILL.md")
-    if not os.path.isfile(skill_md):
-        return
-
-    if not os.path.isfile(cache_file):
-        log_warn(f"{os.path.basename(skill_dir)}: cache não encontrado, pulando patch")
-        return
-
-    with open(cache_file, "r") as f:
-        resolved_json = f.read().strip()
-
     with open(skill_md, "r") as f:
         content = f.read()
 
-    old_block_markers = [
-        "### Step 1: Resolve the Workflow Block",
-        "### Step 1: Resolve the Workflow Block (pre-resolved)",
-    ]
+    label = block["script"].replace(".py", "").replace("resolve_", "")
+    key_note = f" ({block['key_flag']})" if block["key_flag"] else ""
 
-    for marker in old_block_markers:
-        if marker in content:
-            # Find the block boundaries
-            start = content.index(marker)
-            # Try to find the next ### or end of file
-            next_section = content.find("\n### ", start + 3)
-            if next_section == -1:
-                next_section = len(content)
-            before = content[:start]
-            after = content[next_section:]
+    new_block = (
+        f"### Resolve: {label}{key_note} (pre-resolved during install)\n"
+        "\n"
+        f"```json\n{result_json}\n```\n"
+    )
 
-            new_block = (
-                "### Step 1: Workflow Block (pre-resolved during install)\n"
-                "\n"
-                "The workflow block is already resolved below. Read and follow it:\n"
-                "\n"
-                f"```json\n{resolved_json}\n```\n"
-                "\n"
-                "Proceed directly to Step 2. Do NOT run resolve_customization.py."
-            )
-            content = before + new_block + after
-            with open(skill_md, "w") as f:
-                f.write(content)
-            log_ok(f"{os.path.basename(skill_dir)}: workflow embutido no SKILL.md")
-            return
+    if block["full"] in content:
+        content = content.replace(block["full"], new_block, 1)
+        with open(skill_md, "w") as f:
+            f.write(content)
+        return True
+    return False
 
-    log_warn(f"{os.path.basename(skill_dir)}: seção Step 1 não encontrada")
+
+def resolve_skills_customization(project_path: str) -> None:
+    """Pre-resolve ALL resolve_*.py commands in every SKILL.md and embed results."""
+    resolve_base = os.path.join(project_path, "_bmad", "scripts")
+    if not os.path.isdir(resolve_base):
+        log_warn("_bmad/scripts/ não encontrado")
+        return
+
+    log(f"\n{Color.BOLD}🔧 Pré-resolvendo todas as skills...{Color.RESET}")
+
+    skill_dirs = _find_skills(project_path)
+    if not skill_dirs:
+        log_warn("Nenhuma skill encontrada.")
+        return
+
+    total_resolved = 0
+    total_blocks = 0
+
+    for skill_name, skill_dir in skill_dirs:
+        skill_md = os.path.join(skill_dir, "SKILL.md")
+        with open(skill_md, "r") as f:
+            content = f.read()
+
+        blocks = _find_resolve_blocks(content)
+        if not blocks:
+            continue
+
+        total_blocks += len(blocks)
+        for block in blocks:
+            cmd = _extract_command(block, skill_dir, project_path)
+            if not cmd:
+                continue
+
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                if result.returncode == 0 and result.stdout.strip():
+                    if _embed_resolve_result(skill_dir, skill_name, block, result.stdout.strip()):
+                        total_resolved += 1
+                        log_ok(f"{skill_name}: {block['script']} resolvido")
+                    else:
+                        log_warn(f"{skill_name}: não foi possível嵌入 resultado")
+                else:
+                    err = result.stderr.strip() or "saída vazia"
+                    log_warn(f"{skill_name}: {block['script']} falhou ({err})")
+            except subprocess.TimeoutExpired:
+                log_warn(f"{skill_name}: {block['script']} tempo excedido")
+            except Exception as e:
+                log_warn(f"{skill_name}: {block['script']} erro ({e})")
+
+    if total_resolved:
+        log_ok(f"{total_resolved}/{total_blocks} resolves embedados nas skills")
+
 
 
 # ─── Guia de uso ────────────────────────────────────────────────────────
