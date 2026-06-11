@@ -551,28 +551,53 @@ def resolve_skills_customization(project_path: str) -> None:
 
 
 def _patch_skill_md(skill_dir: str, cache_file: str) -> None:
-    """Patch SKILL.md to read cached resolve first, before running the script."""
+    """Embed resolved workflow JSON directly into SKILL.md to eliminate the resolve step entirely."""
     skill_md = os.path.join(skill_dir, "SKILL.md")
     if not os.path.isfile(skill_md):
         return
 
+    if not os.path.isfile(cache_file):
+        log_warn(f"{os.path.basename(skill_dir)}: cache não encontrado, pulando patch")
+        return
+
+    with open(cache_file, "r") as f:
+        resolved_json = f.read().strip()
+
     with open(skill_md, "r") as f:
         content = f.read()
 
-    old_step = "python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow"
-    new_step = (
-        f"Step 1: Resolve the Workflow Block (cached)\n"
-        f"  Read the workflow block from: `{cache_file}`\n"
-        f"  If that file exists, use its contents directly — it was pre-resolved during installation.\n"
-        f"  If missing or stale, fall back to:\n"
-        f"  python3 {{project-root}}/_bmad/scripts/resolve_customization.py --skill {{skill-root}} --key workflow"
-    )
+    old_block_markers = [
+        "### Step 1: Resolve the Workflow Block",
+        "### Step 1: Resolve the Workflow Block (pre-resolved)",
+    ]
 
-    if old_step in content:
-        content = content.replace(old_step, new_step)
-        with open(skill_md, "w") as f:
-            f.write(content)
-        log_ok(f"{os.path.basename(skill_dir)}: SKILL.md patched with cache")
+    for marker in old_block_markers:
+        if marker in content:
+            # Find the block boundaries
+            start = content.index(marker)
+            # Try to find the next ### or end of file
+            next_section = content.find("\n### ", start + 3)
+            if next_section == -1:
+                next_section = len(content)
+            before = content[:start]
+            after = content[next_section:]
+
+            new_block = (
+                "### Step 1: Workflow Block (pre-resolved during install)\n"
+                "\n"
+                "The workflow block is already resolved below. Read and follow it:\n"
+                "\n"
+                f"```json\n{resolved_json}\n```\n"
+                "\n"
+                "Proceed directly to Step 2. Do NOT run resolve_customization.py."
+            )
+            content = before + new_block + after
+            with open(skill_md, "w") as f:
+                f.write(content)
+            log_ok(f"{os.path.basename(skill_dir)}: workflow embutido no SKILL.md")
+            return
+
+    log_warn(f"{os.path.basename(skill_dir)}: seção Step 1 não encontrada")
 
 
 # ─── Guia de uso ────────────────────────────────────────────────────────
@@ -632,12 +657,15 @@ def print_antigravity_hint(project_path: str) -> None:
             for tgt in target_dirs:
                 try:
                     os.makedirs(tgt, exist_ok=True)
+                    # Remove symlinks antigos (reinstalação)
+                    for existing in os.listdir(tgt):
+                        existing_path = os.path.join(tgt, existing)
+                        if os.path.islink(existing_path):
+                            os.unlink(existing_path)
                     linked = 0
-                    for skill in os.listdir(src):
+                    for skill in sorted(os.listdir(src)):
                         skill_path = os.path.abspath(os.path.join(src, skill))
                         link_path = os.path.abspath(os.path.join(tgt, skill))
-                        if os.path.exists(link_path):
-                            continue
                         if os.path.isdir(skill_path):
                             os.symlink(skill_path, link_path, target_is_directory=True)
                         else:
