@@ -493,13 +493,13 @@ def interactive_install(path: str, project_info: dict) -> bool:
 # ─── Resolve customization ──────────────────────────────────────────────
 
 def resolve_skills_customization(project_path: str) -> None:
-    """Run resolve_customization.py for each installed skill."""
+    """Pre-resolve all skills and cache results so SKILL.md can skip the resolve step."""
     resolve_script = os.path.join(project_path, "_bmad", "scripts", "resolve_customization.py")
     if not os.path.isfile(resolve_script):
         log_warn("resolve_customization.py não encontrado em _bmad/scripts/")
         return
 
-    log(f"\n{Color.BOLD}🔧 Resolvendo customizações das skills...{Color.RESET}")
+    log(f"\n{Color.BOLD}🔧 Pré-resolvendo customizações das skills...{Color.RESET}")
 
     skill_dirs = []
     for skills_path in [
@@ -520,6 +520,8 @@ def resolve_skills_customization(project_path: str) -> None:
 
     resolved = 0
     for name, skill_dir in skill_dirs:
+        cache_file = os.path.join(skill_dir, ".resolved_workflow.json")
+
         cmd = [
             sys.executable or "python3",
             resolve_script,
@@ -530,18 +532,47 @@ def resolve_skills_customization(project_path: str) -> None:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=30
             )
-            if result.returncode == 0:
-                log_ok(f"{name}: workflow resolvido")
+            if result.returncode == 0 and result.stdout.strip():
+                with open(cache_file, "w") as f:
+                    f.write(result.stdout.strip())
+                _patch_skill_md(skill_dir, cache_file)
+                log_ok(f"{name}: workflow resolvido e cache salvo")
                 resolved += 1
             else:
-                log_warn(f"{name}: falha ({result.stderr.strip()})")
+                err = result.stderr.strip() or "saída vazia"
+                log_warn(f"{name}: falha ({err})")
         except subprocess.TimeoutExpired:
             log_warn(f"{name}: tempo excedido")
         except Exception as e:
             log_warn(f"{name}: erro ({e})")
 
     if resolved:
-        log_ok(f"{resolved}/{len(skill_dirs)} skills resolvidas")
+        log_ok(f"{resolved}/{len(skill_dirs)} skills pré-resolvidas")
+
+
+def _patch_skill_md(skill_dir: str, cache_file: str) -> None:
+    """Patch SKILL.md to read cached resolve first, before running the script."""
+    skill_md = os.path.join(skill_dir, "SKILL.md")
+    if not os.path.isfile(skill_md):
+        return
+
+    with open(skill_md, "r") as f:
+        content = f.read()
+
+    old_step = "python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow"
+    new_step = (
+        f"Step 1: Resolve the Workflow Block (cached)\n"
+        f"  Read the workflow block from: `{cache_file}`\n"
+        f"  If that file exists, use its contents directly — it was pre-resolved during installation.\n"
+        f"  If missing or stale, fall back to:\n"
+        f"  python3 {{project-root}}/_bmad/scripts/resolve_customization.py --skill {{skill-root}} --key workflow"
+    )
+
+    if old_step in content:
+        content = content.replace(old_step, new_step)
+        with open(skill_md, "w") as f:
+            f.write(content)
+        log_ok(f"{os.path.basename(skill_dir)}: SKILL.md patched with cache")
 
 
 # ─── Guia de uso ────────────────────────────────────────────────────────
