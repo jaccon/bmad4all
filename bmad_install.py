@@ -490,6 +490,60 @@ def interactive_install(path: str, project_info: dict) -> bool:
     return run_npx_install(path, modules=selected_mods, tools=bmad_tools)
 
 
+# ─── Resolve customization ──────────────────────────────────────────────
+
+def resolve_skills_customization(project_path: str) -> None:
+    """Run resolve_customization.py for each installed skill."""
+    resolve_script = os.path.join(project_path, "_bmad", "scripts", "resolve_customization.py")
+    if not os.path.isfile(resolve_script):
+        log_warn("resolve_customization.py não encontrado em _bmad/scripts/")
+        return
+
+    log(f"\n{Color.BOLD}🔧 Resolvendo customizações das skills...{Color.RESET}")
+
+    skill_dirs = []
+    for skills_path in [
+        os.path.join(project_path, ".claude", "skills"),
+        os.path.join(project_path, ".gemini", "skills"),
+        os.path.join(project_path, ".agents", "skills"),
+        os.path.join(project_path, ".agent", "skills"),
+    ]:
+        if os.path.isdir(skills_path):
+            for entry in sorted(os.listdir(skills_path)):
+                skill_dir = os.path.join(skills_path, entry)
+                if os.path.isdir(skill_dir) and os.path.isfile(os.path.join(skill_dir, "customize.toml")):
+                    skill_dirs.append((entry, skill_dir))
+
+    if not skill_dirs:
+        log_warn("Nenhuma skill com customize.toml encontrada.")
+        return
+
+    resolved = 0
+    for name, skill_dir in skill_dirs:
+        cmd = [
+            sys.executable or "python3",
+            resolve_script,
+            "--skill", skill_dir,
+            "--key", "workflow",
+        ]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=30
+            )
+            if result.returncode == 0:
+                log_ok(f"{name}: workflow resolvido")
+                resolved += 1
+            else:
+                log_warn(f"{name}: falha ({result.stderr.strip()})")
+        except subprocess.TimeoutExpired:
+            log_warn(f"{name}: tempo excedido")
+        except Exception as e:
+            log_warn(f"{name}: erro ({e})")
+
+    if resolved:
+        log_ok(f"{resolved}/{len(skill_dirs)} skills resolvidas")
+
+
 # ─── Guia de uso ────────────────────────────────────────────────────────
 
 def print_usage_guide() -> None:
@@ -692,6 +746,7 @@ Exemplos:
             project_info["language"], LANG_MODULES["generic"]
         )
         selected_tools_raw = args.tools.split(",") if args.tools else ["claude-code"]
+        is_antigravity = "antigravity" in selected_tools_raw
         # Antigravity CLI não é suportado diretamente pelo BMAD; usa claude-code como fallback
         selected_tools = [
             "claude-code" if t == "antigravity" else t
@@ -710,6 +765,12 @@ Exemplos:
             use_next=args.next,
             pin=args.pin,
         )
+
+        if success:
+            resolve_skills_customization(project_path)
+        if is_antigravity:
+            print_antigravity_hint(project_path)
+
         sys.exit(0 if success else 1)
 
     # Interactive
@@ -728,7 +789,9 @@ Exemplos:
             log(f"   Ou use {Color.BOLD}--next{Color.RESET} para pular a resolução de tags:")
             log(f"   {Color.DIM}   bmad_install.py --modules bmm,tea --tools gemini --yes --next{Color.RESET}")
 
+    resolve_skills_customization(project_path)
     print_usage_guide()
+
     if is_antigravity:
         print_antigravity_hint(project_path)
 
