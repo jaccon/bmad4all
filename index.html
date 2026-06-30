@@ -1,0 +1,4084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebPageTest Performance Report Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-card: rgba(22, 28, 45, 0.7);
+            --border-card: rgba(255, 255, 255, 0.06);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent-purple: #a855f7;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-orange: #f97316;
+            --accent-red: #ef4444;
+            --accent-yellow: #eab308;
+            --bg-glass: rgba(15, 23, 42, 0.45);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 2.5rem 1.5rem;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Glassmorphism Header */
+        header {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.25rem;
+        }
+
+        .header-title p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .selector-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        label {
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        select {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-card);
+            color: var(--text-main);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Metric Dashboard Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #fff;
+        }
+
+        .metric-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Dashboard Main Layout */
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .dashboard-layout {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-card);
+            border-radius: 16px;
+            padding: 1.75rem;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Optimization Scores */
+        .scores-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .score-box {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .score-circle {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            margin: 0 auto 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.25rem;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .score-good {
+            border: 3px solid var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .score-avg {
+            border: 3px solid var(--accent-orange);
+            color: var(--accent-orange);
+        }
+
+        .score-poor {
+            border: 3px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .score-box p {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Charts Section */
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .chart-box {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            padding: 1rem;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-box h4 {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            text-align: center;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            flex-grow: 1;
+            height: calc(100% - 2rem);
+        }
+
+        /* Table Styles */
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 0.85rem 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            height: 8px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-cyan) 100%);
+        }
+
+        /* Tab panels */
+        .tabs-header {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 0.35rem;
+            border-radius: 10px;
+            border: 1px solid var(--border-card);
+            width: fit-content;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.5rem 1.25rem;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: var(--bg-card);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Interactive Waterfall Chart Section */
+        .waterfall-card {
+            margin-top: 2rem;
+        }
+
+        .waterfall-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border-card);
+            color: var(--text-main);
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.85rem;
+            outline: none;
+            width: 280px;
+            transition: border-color 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-card);
+            color: var(--text-muted);
+            padding: 0.4rem 0.85rem;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+            background: var(--accent-purple);
+            color: #fff;
+            border-color: var(--accent-purple);
+        }
+
+        /* Legend */
+        .waterfall-legend {
+            display: flex;
+            gap: 1.25rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+            background: rgba(15, 23, 42, 0.4);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-card);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* Waterfall Grid */
+        .waterfall-table {
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(15, 23, 42, 0.3);
+            display: flex;
+            flex-direction: column;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .wf-header {
+            display: grid;
+            grid-template-columns: 40px 100px 300px 1fr;
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .wf-header-cell {
+            padding: 0.75rem 1rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .wf-row {
+            display: grid;
+            grid-template-columns: 40px 100px 300px 1fr;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            align-items: center;
+            transition: background 0.15s;
+        }
+
+        .wf-row:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .wf-cell {
+            padding: 0.6rem 1rem;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .wf-index {
+            color: var(--text-muted);
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            padding-right: 0;
+        }
+
+        .wf-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            text-align: center;
+            width: fit-content;
+        }
+
+        .badge-doc { background: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .badge-css { background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); }
+        .badge-js { background: rgba(249, 115, 22, 0.15); color: #ffedd5; border: 1px solid rgba(249, 115, 22, 0.3); }
+        .badge-img { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-font { background: rgba(234, 179, 8, 0.15); color: #fef08a; border: 1px solid rgba(234, 179, 8, 0.3); }
+        .badge-xhr { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-other { background: rgba(156, 163, 175, 0.15); color: #d1d5db; border: 1px solid rgba(156, 163, 175, 0.3); }
+
+        /* Timing status badges */
+        .status-badge {
+            display: inline-block;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-left: 0.4rem;
+            vertical-align: middle;
+        }
+        .status-good {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .status-ok {
+            background-color: rgba(234, 179, 8, 0.15);
+            color: #fef08a;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        .status-bad {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .wf-url-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            cursor: help;
+        }
+
+        .wf-url-host {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: block;
+            margin-top: 0.1rem;
+        }
+
+        /* Timeline Graphics */
+        .wf-timeline-cell {
+            padding: 0 1rem;
+            position: relative;
+            height: 24px;
+            display: flex;
+            align-items: center;
+        }
+
+        .wf-bar {
+            height: 14px;
+            border-radius: 3px;
+            position: absolute;
+            display: flex;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+            min-width: 3px;
+            cursor: pointer;
+        }
+
+        .segment-dns { background-color: var(--accent-yellow); height: 100%; }
+        .segment-connect { background-color: var(--accent-orange); height: 100%; }
+        .segment-ssl { background-color: var(--accent-red); height: 100%; }
+        .segment-ttfb { background-color: var(--accent-purple); height: 100%; }
+        .segment-download { background-color: var(--accent-blue); height: 100%; }
+        
+        /* Tooltip style */
+        .bar-tooltip {
+            position: absolute;
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #fff;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+            z-index: 100;
+            display: none;
+            width: max-content;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .tooltip-title {
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.25rem;
+            color: var(--accent-cyan);
+            max-width: 400px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1.5rem;
+            margin-bottom: 0.15rem;
+        }
+
+        .tooltip-label {
+            color: var(--text-muted);
+        }
+
+        .tooltip-val {
+            font-weight: 600;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="header-title">
+                <h1>WebPageTest Report Dashboard</h1>
+                <p id="dashboard-subtitle">Performance Analyser POC</p>
+            </div>
+            <div class="selector-group">
+                <label for="run-selector">View Selection</label>
+                <select id="run-selector" onchange="switchView(this.value)"></select>
+            </div>
+        </header>
+
+        <!-- ───────────────────────────────────────────────────────────────── -->
+        <!-- Comparison View Section (only displayed for multi-url runs) -->
+        <!-- ───────────────────────────────────────────────────────────────── -->
+        <div id="comparison-section" style="display: none;">
+            <div class="card" style="margin-bottom: 2rem;">
+                <div class="card-header">
+                    <div class="card-title">📊 Batch Comparison Summary</div>
+                </div>
+                <div class="table-responsive">
+                    <table id="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Target Domain</th>
+                                <th>Requests</th>
+                                <th>TTFB</th>
+                                <th>Doc Load</th>
+                                <th>Fully Loaded</th>
+                                <th>Page Weight</th>
+                                <th>Cache</th>
+                                <th>CDN</th>
+                                <th>Gzip</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="dashboard-layout" style="margin-bottom: 2rem;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">⏱️ Timing Comparison (ms)</div>
+                    </div>
+                    <div class="chart-wrapper" style="height: 350px;">
+                        <canvas id="chart-compare-timings"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">📦 Page Weight Comparison (KB)</div>
+                    </div>
+                    <div class="chart-wrapper" style="height: 350px;">
+                        <canvas id="chart-compare-weight"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Dashboard -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div>
+                    <div class="metric-label">TTFB (Base Page)</div>
+                    <div class="metric-value" id="val-ttfb">-</div>
+                </div>
+                <div class="metric-desc">Time to first byte from navigation start</div>
+            </div>
+            <div class="metric-card">
+                <div>
+                    <div class="metric-label">Document Complete</div>
+                    <div class="metric-value" id="val-doc-load">-</div>
+                </div>
+                <div class="metric-desc">Base HTML load finished</div>
+            </div>
+            <div class="metric-card">
+                <div>
+                    <div class="metric-label">Fully Loaded</div>
+                    <div class="metric-value" id="val-fully-loaded">-</div>
+                </div>
+                <div class="metric-desc">Network quiet / last request done</div>
+            </div>
+            <div class="metric-card">
+                <div>
+                    <div class="metric-label">Page Weight</div>
+                    <div class="metric-value" id="val-bytes">-</div>
+                </div>
+                <div class="metric-desc">Total downloaded data</div>
+            </div>
+            <div class="metric-card">
+                <div>
+                    <div class="metric-label">Total Requests</div>
+                    <div class="metric-value" id="val-requests">-</div>
+                </div>
+                <div class="metric-desc">Total HTTP resource requests</div>
+            </div>
+            <div class="metric-card">
+                <div>
+                    <div class="metric-label">Total CPU Time</div>
+                    <div class="metric-value" id="val-cpu">-</div>
+                </div>
+                <div class="metric-desc">Browser thread processing time</div>
+            </div>
+        </div>
+
+        <!-- Dashboard Layout -->
+        <div class="dashboard-layout">
+            <!-- Resource breakdowns and optimization scores -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🚀 Performance Diagnostics</div>
+                </div>
+
+                <div class="scores-row">
+                    <div class="score-box">
+                        <div class="score-circle" id="score-cache">-</div>
+                        <p>Caching</p>
+                    </div>
+                    <div class="score-box">
+                        <div class="score-circle" id="score-cdn">-</div>
+                        <p>CDN Score</p>
+                    </div>
+                    <div class="score-box">
+                        <div class="score-circle" id="score-gzip">-</div>
+                        <p>Gzip</p>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-box">
+                        <h4>Requests by Resource Type</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-requests"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-box">
+                        <h4>Bytes by Resource Type</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-bytes"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="resources-table">
+                        <thead>
+                            <tr>
+                                <th>Resource Type</th>
+                                <th>Requests</th>
+                                <th>Bytes In</th>
+                                <th>Avg Load Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Side Card: Domain Weight breakdown -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🌐 Top Domains by Size</div>
+                </div>
+                <div class="table-responsive">
+                    <table id="domains-table">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Bytes In</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Waterfall Card -->
+        <div class="card waterfall-card">
+            <div class="card-header">
+                <div class="card-title">📊 Interactive Request Waterfall</div>
+                <div class="waterfall-legend">
+                    <div class="legend-item"><div class="legend-color" style="background-color: var(--accent-yellow)"></div>DNS</div>
+                    <div class="legend-item"><div class="legend-color" style="background-color: var(--accent-orange)"></div>Connect</div>
+                    <div class="legend-item"><div class="legend-color" style="background-color: var(--accent-red)"></div>SSL</div>
+                    <div class="legend-item"><div class="legend-color" style="background-color: var(--accent-purple)"></div>TTFB</div>
+                    <div class="legend-item"><div class="legend-color" style="background-color: var(--accent-blue)"></div>Download</div>
+                </div>
+            </div>
+
+            <div class="waterfall-toolbar">
+                <input type="text" id="wf-search" class="search-input" placeholder="Search URL or Domain..." oninput="updateWaterfall()">
+                <div class="filter-buttons" id="wf-filters">
+                    <button class="filter-btn active" onclick="filterType('all')">All</button>
+                    <button class="filter-btn" onclick="filterType('document')">Docs</button>
+                    <button class="filter-btn" onclick="filterType('stylesheet')">CSS</button>
+                    <button class="filter-btn" onclick="filterType('script')">JS</button>
+                    <button class="filter-btn" onclick="filterType('image')">Images</button>
+                    <button class="filter-btn" onclick="filterType('font')">Fonts</button>
+                    <button class="filter-btn" onclick="filterType('xhr')">Fetch/XHR</button>
+                    <button class="filter-btn" onclick="filterType('other')">Other</button>
+                </div>
+            </div>
+
+            <div class="waterfall-table">
+                <div class="wf-header">
+                    <div class="wf-header-cell" style="text-align: center;">#</div>
+                    <div class="wf-header-cell">Type</div>
+                    <div class="wf-header-cell">Resource / URL</div>
+                    <div class="wf-header-cell">Timeline (Total Load Time)</div>
+                </div>
+                <div id="waterfall-rows"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip Element -->
+    <div id="bar-tooltip" class="bar-tooltip"></div>
+
+    <script>
+        // Data injected from Python
+        const reportData = {
+  "Run 1 - First View - Step_1": {
+    "metadata": {
+      "run": "1",
+      "cached": "0",
+      "step": "Step_1",
+      "name": "Run 1 - First View - Step_1"
+    },
+    "summary": {
+      "total_requests": 129,
+      "total_bytes_in": 1835968.0,
+      "total_bytes_out": 365892.0,
+      "total_uncompressed": 5624767.0,
+      "fully_loaded_ms": 8556.0,
+      "base_ttfb_ms": 494.0,
+      "base_load_ms": 506.0,
+      "calculated_ttfb_ms": 624.0,
+      "total_cpu_ms": 1744.0,
+      "cpu_eval_ms": 282.0,
+      "cpu_compile_ms": 86.0,
+      "cpu_call_ms": 1378.0,
+      "avg_cache_score": 49.375,
+      "avg_cdn_score": 96.8,
+      "avg_gzip_score": 100.0
+    },
+    "resources": {
+      "Document": {
+        "count": 2,
+        "bytes_in": 24925.0,
+        "bytes_out": 4814.0,
+        "duration_ms_sum": 841.0,
+        "avg_duration_ms": 420.5
+      },
+      "Stylesheet": {
+        "count": 3,
+        "bytes_in": 42049.0,
+        "bytes_out": 6483.0,
+        "duration_ms_sum": 457.0,
+        "avg_duration_ms": 152.33333333333334
+      },
+      "Font": {
+        "count": 2,
+        "bytes_in": 121760.0,
+        "bytes_out": 4736.0,
+        "duration_ms_sum": 224.0,
+        "avg_duration_ms": 112.0
+      },
+      "Other": {
+        "count": 2,
+        "bytes_in": 6860.0,
+        "bytes_out": 4316.0,
+        "duration_ms_sum": 410.0,
+        "avg_duration_ms": 205.0
+      },
+      "Script": {
+        "count": 57,
+        "bytes_in": 1120437.0,
+        "bytes_out": 120963.0,
+        "duration_ms_sum": 29626.0,
+        "avg_duration_ms": 519.7543859649123
+      },
+      "Image": {
+        "count": 14,
+        "bytes_in": 402335.0,
+        "bytes_out": 40580.0,
+        "duration_ms_sum": 3505.0,
+        "avg_duration_ms": 250.35714285714286
+      },
+      "Fetch": {
+        "count": 32,
+        "bytes_in": 104811.0,
+        "bytes_out": 141068.0,
+        "duration_ms_sum": 5036.0,
+        "avg_duration_ms": 157.375
+      },
+      "Preflight": {
+        "count": 10,
+        "bytes_in": 0.0,
+        "bytes_out": 23857.0,
+        "duration_ms_sum": 1469.0,
+        "avg_duration_ms": 146.9
+      },
+      "Xhr": {
+        "count": 4,
+        "bytes_in": 12731.0,
+        "bytes_out": 10585.0,
+        "duration_ms_sum": 722.0,
+        "avg_duration_ms": 180.5
+      },
+      "Ping": {
+        "count": 3,
+        "bytes_in": 60.0,
+        "bytes_out": 8490.0,
+        "duration_ms_sum": 188.0,
+        "avg_duration_ms": 62.666666666666664
+      }
+    },
+    "domains": [
+      [
+        "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        {
+          "count": 76,
+          "bytes_in": 904873.0,
+          "bytes_out": 174019.0
+        }
+      ],
+      [
+        "staging-na01.natura.com",
+        {
+          "count": 10,
+          "bytes_in": 402282.0,
+          "bytes_out": 25717.0
+        }
+      ],
+      [
+        "www.googletagmanager.com",
+        {
+          "count": 2,
+          "bytes_in": 333262.0,
+          "bytes_out": 4118.0
+        }
+      ],
+      [
+        "cdn.jsdelivr.net",
+        {
+          "count": 2,
+          "bytes_in": 89515.0,
+          "bytes_out": 4532.0
+        }
+      ],
+      [
+        "sdk.mercadopago.com",
+        {
+          "count": 1,
+          "bytes_in": 58878.0,
+          "bytes_out": 1990.0
+        }
+      ],
+      [
+        "firebaseremoteconfig.googleapis.com",
+        {
+          "count": 2,
+          "bytes_in": 14616.0,
+          "bytes_out": 5942.0
+        }
+      ],
+      [
+        "api.mercadopago.com",
+        {
+          "count": 2,
+          "bytes_in": 12431.0,
+          "bytes_out": 5906.0
+        }
+      ],
+      [
+        "cdn.cookielaw.org",
+        {
+          "count": 3,
+          "bytes_in": 9182.0,
+          "bytes_out": 6453.0
+        }
+      ],
+      [
+        "dev.visualwebsiteoptimizer.com",
+        {
+          "count": 5,
+          "bytes_in": 4627.0,
+          "bytes_out": 13490.0
+        }
+      ],
+      [
+        "hml-avon-mx.hml.naturacloud.com",
+        {
+          "count": 14,
+          "bytes_in": 3026.0,
+          "bytes_out": 82325.0
+        }
+      ],
+      [
+        "www.mercadolibre.com",
+        {
+          "count": 5,
+          "bytes_in": 2510.0,
+          "bytes_out": 15965.0
+        }
+      ],
+      [
+        "firebaseinstallations.googleapis.com",
+        {
+          "count": 2,
+          "bytes_in": 659.0,
+          "bytes_out": 6455.0
+        }
+      ],
+      [
+        "api.mercadolibre.com",
+        {
+          "count": 1,
+          "bytes_in": 98.0,
+          "bytes_out": 2323.0
+        }
+      ],
+      [
+        "www.mercadolivre.com",
+        {
+          "count": 1,
+          "bytes_in": 9.0,
+          "bytes_out": 5053.0
+        }
+      ],
+      [
+        "s3-sa-east-1.amazonaws.com",
+        {
+          "count": 1,
+          "bytes_in": 0.0,
+          "bytes_out": 2047.0
+        }
+      ],
+      [
+        "www.google-analytics.com",
+        {
+          "count": 2,
+          "bytes_in": 0.0,
+          "bytes_out": 9557.0
+        }
+      ]
+    ],
+    "cdn": {
+      "Akamai": {
+        "count": 91,
+        "bytes_in": 966777.0
+      },
+      "jsDelivr": {
+        "count": 2,
+        "bytes_in": 89515.0
+      },
+      "Cloudflare": {
+        "count": 13,
+        "bytes_in": 411464.0
+      },
+      "Google": {
+        "count": 13,
+        "bytes_in": 353164.0
+      },
+      "Direct / Unknown": {
+        "count": 8,
+        "bytes_in": 14941.0
+      },
+      "Amazon CloudFront": {
+        "count": 2,
+        "bytes_in": 107.0
+      }
+    },
+    "protocols": {
+      "HTTP/2": 123,
+      "h3": 5,
+      "http/1.1": 1
+    },
+    "responses": {
+      "200": 111,
+      "308": 1,
+      "404": 7,
+      "204": 10
+    },
+    "waterfall": [
+      {
+        "index": 1,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/",
+        "display_url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Document",
+        "bytes_in": 22433.0,
+        "start_time": 130.0,
+        "dns_ms": 77.0,
+        "connect_ms": 13.0,
+        "ssl_ms": 38.0,
+        "ttfb_ms": 494.0,
+        "download_ms": 12.0,
+        "total_ms": 634.0,
+        "protocol": "HTTP/2",
+        "priority": "Highest"
+      },
+      {
+        "index": 2,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0d.cgej1bl6ft.css",
+        "display_url": "/_next/static/chunks/0d.cgej1bl6ft.css",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Stylesheet",
+        "bytes_in": 6917.0,
+        "start_time": 648.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 235.0,
+        "download_ms": 10.0,
+        "total_ms": 245.0,
+        "protocol": "HTTP/2",
+        "priority": "Highest"
+      },
+      {
+        "index": 3,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0k01ntuzwss_b.css",
+        "display_url": "/_next/static/chunks/0k01ntuzwss_b.css",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Stylesheet",
+        "bytes_in": 29857.0,
+        "start_time": 648.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 87.0,
+        "download_ms": 16.0,
+        "total_ms": 103.0,
+        "protocol": "HTTP/2",
+        "priority": "Highest"
+      },
+      {
+        "index": 4,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/media/ce62453a442c7f35-s.p.0333ktddfbsxy.woff2",
+        "display_url": "/_next/static/media/ce62453a442c7f35-s.p.0333ktddfbsxy.woff2",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Font",
+        "bytes_in": 37520.0,
+        "start_time": 649.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 105.0,
+        "download_ms": 10.0,
+        "total_ms": 115.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 5,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/crajiru/?id=GTM-5RBWPQDW",
+        "display_url": "/crajiru/?id=GTM-5RBWPQDW",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "308",
+        "type": "Other",
+        "bytes_in": 0.0,
+        "start_time": 664.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 142.0,
+        "download_ms": 0.0,
+        "total_ms": 142.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 6,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0.vqrzwh.0zn0.js",
+        "display_url": "/_next/static/chunks/0.vqrzwh.0zn0.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 9350.0,
+        "start_time": 704.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 166.0,
+        "download_ms": 4.0,
+        "total_ms": 170.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 7,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0np.d~hc1-pmh.js",
+        "display_url": "/_next/static/chunks/0np.d~hc1-pmh.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 10809.0,
+        "start_time": 729.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1024.0,
+        "download_ms": 37.0,
+        "total_ms": 1061.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 8,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/066_s_.eob3p..js",
+        "display_url": "/_next/static/chunks/066_s_.eob3p..js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 70789.0,
+        "start_time": 740.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1001.0,
+        "download_ms": 32.0,
+        "total_ms": 1033.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 9,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/06q5df0~504sm.js",
+        "display_url": "/_next/static/chunks/06q5df0~504sm.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 37354.0,
+        "start_time": 741.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 909.0,
+        "download_ms": 34.0,
+        "total_ms": 943.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 10,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/turbopack-0lxzad7qzqhgw.js",
+        "display_url": "/_next/static/chunks/turbopack-0lxzad7qzqhgw.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 4147.0,
+        "start_time": 741.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1100.0,
+        "download_ms": 11.0,
+        "total_ms": 1111.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 11,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0r~blk8d6rczw.js",
+        "display_url": "/_next/static/chunks/0r~blk8d6rczw.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 7963.0,
+        "start_time": 741.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 820.0,
+        "download_ms": 7.0,
+        "total_ms": 827.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 12,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0f6xqofaozkpy.js",
+        "display_url": "/_next/static/chunks/0f6xqofaozkpy.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 8802.0,
+        "start_time": 742.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 935.0,
+        "download_ms": 37.0,
+        "total_ms": 972.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 13,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0poaudp0v5htv.js",
+        "display_url": "/_next/static/chunks/0poaudp0v5htv.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 8811.0,
+        "start_time": 742.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1021.0,
+        "download_ms": 5.0,
+        "total_ms": 1026.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 14,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/14r02n_uokac~.js",
+        "display_url": "/_next/static/chunks/14r02n_uokac~.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 9879.0,
+        "start_time": 742.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 171.0,
+        "download_ms": 4.0,
+        "total_ms": 175.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 15,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0i-uhmd1sbqqq.js",
+        "display_url": "/_next/static/chunks/0i-uhmd1sbqqq.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 7203.0,
+        "start_time": 743.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1028.0,
+        "download_ms": 39.0,
+        "total_ms": 1067.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 16,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/14i7k4keql8x3.js",
+        "display_url": "/_next/static/chunks/14i7k4keql8x3.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 9710.0,
+        "start_time": 743.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 355.0,
+        "download_ms": 12.0,
+        "total_ms": 367.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 17,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0w94r0ujc~ovb.js",
+        "display_url": "/_next/static/chunks/0w94r0ujc~ovb.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 7701.0,
+        "start_time": 743.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1000.0,
+        "download_ms": 13.0,
+        "total_ms": 1013.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 18,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0h6ohhmiq1vpj.js",
+        "display_url": "/_next/static/chunks/0h6ohhmiq1vpj.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 9633.0,
+        "start_time": 744.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 128.0,
+        "download_ms": 9.0,
+        "total_ms": 137.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 19,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/07tmq4e0ekdfu.js",
+        "display_url": "/_next/static/chunks/07tmq4e0ekdfu.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 7506.0,
+        "start_time": 744.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 379.0,
+        "download_ms": 3.0,
+        "total_ms": 382.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 20,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0r45-1_xbsr65.js",
+        "display_url": "/_next/static/chunks/0r45-1_xbsr65.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 8228.0,
+        "start_time": 744.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 818.0,
+        "download_ms": 3.0,
+        "total_ms": 821.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 21,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0ar8.5cex3bcy.js",
+        "display_url": "/_next/static/chunks/0ar8.5cex3bcy.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 18853.0,
+        "start_time": 746.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1033.0,
+        "download_ms": 14.0,
+        "total_ms": 1047.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 22,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0h6a8jsmhlzrr.js",
+        "display_url": "/_next/static/chunks/0h6a8jsmhlzrr.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 60943.0,
+        "start_time": 747.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 167.0,
+        "download_ms": 66.0,
+        "total_ms": 233.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 23,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0d4~pcva1uk-a.js",
+        "display_url": "/_next/static/chunks/0d4~pcva1uk-a.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 12942.0,
+        "start_time": 752.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 673.0,
+        "download_ms": 17.0,
+        "total_ms": 690.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 24,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0eap4s_bpoo2u.js",
+        "display_url": "/_next/static/chunks/0eap4s_bpoo2u.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 14473.0,
+        "start_time": 753.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 171.0,
+        "download_ms": 22.0,
+        "total_ms": 193.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 25,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/11nbzfk3xytj4.js",
+        "display_url": "/_next/static/chunks/11nbzfk3xytj4.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 12538.0,
+        "start_time": 753.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 366.0,
+        "download_ms": 3.0,
+        "total_ms": 369.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 26,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/08gs5khbvk5r4.js",
+        "display_url": "/_next/static/chunks/08gs5khbvk5r4.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 20576.0,
+        "start_time": 753.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 471.0,
+        "download_ms": 53.0,
+        "total_ms": 524.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 27,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/04pf3-bg2r3qs.js",
+        "display_url": "/_next/static/chunks/04pf3-bg2r3qs.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 15169.0,
+        "start_time": 753.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1088.0,
+        "download_ms": 7.0,
+        "total_ms": 1095.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 28,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0bi.eyu__yfde.js",
+        "display_url": "/_next/static/chunks/0bi.eyu__yfde.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 12419.0,
+        "start_time": 753.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1052.0,
+        "download_ms": 11.0,
+        "total_ms": 1063.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 29,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/04z7d9p4d03dx.js",
+        "display_url": "/_next/static/chunks/04z7d9p4d03dx.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 6842.0,
+        "start_time": 753.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 805.0,
+        "download_ms": 16.0,
+        "total_ms": 821.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 30,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0flgvl2byd-t9.js",
+        "display_url": "/_next/static/chunks/0flgvl2byd-t9.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 45994.0,
+        "start_time": 755.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 677.0,
+        "download_ms": 20.0,
+        "total_ms": 697.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 31,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0o~sow7q4f22z.js",
+        "display_url": "/_next/static/chunks/0o~sow7q4f22z.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 16556.0,
+        "start_time": 756.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 237.0,
+        "download_ms": 14.0,
+        "total_ms": 251.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 32,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/15l41fwvsn_9f.js",
+        "display_url": "/_next/static/chunks/15l41fwvsn_9f.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 32267.0,
+        "start_time": 756.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 739.0,
+        "download_ms": 31.0,
+        "total_ms": 770.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 33,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0jw~vy28s90nw.js",
+        "display_url": "/_next/static/chunks/0jw~vy28s90nw.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 8171.0,
+        "start_time": 756.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1130.0,
+        "download_ms": 7.0,
+        "total_ms": 1137.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 34,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0cyrovrx7240z.js",
+        "display_url": "/_next/static/chunks/0cyrovrx7240z.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 9897.0,
+        "start_time": 756.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 988.0,
+        "download_ms": 26.0,
+        "total_ms": 1014.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 35,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0z-_ix1axbtwl.js",
+        "display_url": "/_next/static/chunks/0z-_ix1axbtwl.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 44167.0,
+        "start_time": 756.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 643.0,
+        "download_ms": 32.0,
+        "total_ms": 675.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 36,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0oowacogl3rel.js",
+        "display_url": "/_next/static/chunks/0oowacogl3rel.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 27226.0,
+        "start_time": 756.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 895.0,
+        "download_ms": 30.0,
+        "total_ms": 925.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 37,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0jexcomsfp~n9.js",
+        "display_url": "/_next/static/chunks/0jexcomsfp~n9.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 16036.0,
+        "start_time": 759.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 959.0,
+        "download_ms": 27.0,
+        "total_ms": 986.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 38,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/14-a~p053c.3g.js",
+        "display_url": "/_next/static/chunks/14-a~p053c.3g.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 943.0,
+        "start_time": 759.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 767.0,
+        "download_ms": 1.0,
+        "total_ms": 768.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 39,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/14~4hca4b_dxi.js",
+        "display_url": "/_next/static/chunks/14~4hca4b_dxi.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 1237.0,
+        "start_time": 759.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 1058.0,
+        "download_ms": 26.0,
+        "total_ms": 1084.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 40,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/01xnljsgkn208.js",
+        "display_url": "/_next/static/chunks/01xnljsgkn208.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 26879.0,
+        "start_time": 759.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 218.0,
+        "download_ms": 7.0,
+        "total_ms": 225.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 41,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/13xtrt5-p-bx8.js",
+        "display_url": "/_next/static/chunks/13xtrt5-p-bx8.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 17656.0,
+        "start_time": 760.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 207.0,
+        "download_ms": 6.0,
+        "total_ms": 213.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 42,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0hczun1s~1m1w.js",
+        "display_url": "/_next/static/chunks/0hczun1s~1m1w.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 3723.0,
+        "start_time": 760.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 227.0,
+        "download_ms": 5.0,
+        "total_ms": 232.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 43,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0ps.k858eief1.js",
+        "display_url": "/_next/static/chunks/0ps.k858eief1.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 8877.0,
+        "start_time": 760.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 217.0,
+        "download_ms": 12.0,
+        "total_ms": 229.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 44,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/00t~i4ybg~s.e.js",
+        "display_url": "/_next/static/chunks/00t~i4ybg~s.e.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 7894.0,
+        "start_time": 760.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 794.0,
+        "download_ms": 17.0,
+        "total_ms": 811.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 45,
+        "url": "https://cdn.jsdelivr.net/npm/@naturacosmeticos/natds-icons@latest/dist/natds-icons.css",
+        "display_url": "/npm/@naturacosmeticos/natds-icons@latest/dist/natds-icons.css",
+        "host": "cdn.jsdelivr.net",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Stylesheet",
+        "bytes_in": 5275.0,
+        "start_time": 761.0,
+        "dns_ms": 8.0,
+        "connect_ms": 21.0,
+        "ssl_ms": 53.0,
+        "ttfb_ms": 25.0,
+        "download_ms": 2.0,
+        "total_ms": 109.0,
+        "protocol": "HTTP/2",
+        "priority": "Highest"
+      },
+      {
+        "index": 46,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/crajiru?id=GTM-5RBWPQDW",
+        "display_url": "/crajiru?id=GTM-5RBWPQDW",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "404",
+        "type": "Script",
+        "bytes_in": 8526.0,
+        "start_time": 809.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 141.0,
+        "download_ms": 17.0,
+        "total_ms": 158.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 47,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwb4e6d89b/C03/AVON%20ULTRA_ECOMM_1920x832.jpg?q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwb4e6d89b/C03/AVON%20ULTRA_ECOMM_1920x832.jpg?q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 283900.0,
+        "start_time": 810.0,
+        "dns_ms": 62.0,
+        "connect_ms": 14.0,
+        "ssl_ms": 29.0,
+        "ttfb_ms": 295.0,
+        "download_ms": 59.0,
+        "total_ms": 459.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 48,
+        "url": "https://sdk.mercadopago.com/js/v2",
+        "display_url": "/js/v2",
+        "host": "sdk.mercadopago.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 58878.0,
+        "start_time": 832.0,
+        "dns_ms": 84.0,
+        "connect_ms": 23.0,
+        "ssl_ms": 42.0,
+        "ttfb_ms": 25.0,
+        "download_ms": 30.0,
+        "total_ms": 204.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 49,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw050f00d0/assets-app/icons-2.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw050f00d0/assets-app/icons-2.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 6395.0,
+        "start_time": 1045.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 332.0,
+        "download_ms": 1.0,
+        "total_ms": 333.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 50,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwbd7de4f4/assets-app/icons-3.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwbd7de4f4/assets-app/icons-3.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 5575.0,
+        "start_time": 1048.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 185.0,
+        "download_ms": 1.0,
+        "total_ms": 186.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 51,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwca2740df/assets-app/icons-1.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwca2740df/assets-app/icons-1.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 3311.0,
+        "start_time": 1048.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 274.0,
+        "download_ms": 1.0,
+        "total_ms": 275.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 52,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwa8ebbbe3/assets-app/icons-4.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwa8ebbbe3/assets-app/icons-4.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 4121.0,
+        "start_time": 1048.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 279.0,
+        "download_ms": 0.0,
+        "total_ms": 279.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 53,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw05ec58a5/assets-app/icons-sets.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw05ec58a5/assets-app/icons-sets.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 6598.0,
+        "start_time": 1049.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 204.0,
+        "download_ms": 1.0,
+        "total_ms": 205.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 54,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw74a1f820/assets-app/icons-8.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw74a1f820/assets-app/icons-8.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 5597.0,
+        "start_time": 1051.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 199.0,
+        "download_ms": 1.0,
+        "total_ms": 200.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 55,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw222d82b6/assets-app/casa-y-estilo.jpg?sw=150&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dw222d82b6/assets-app/casa-y-estilo.jpg?sw=150&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 6021.0,
+        "start_time": 1051.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 248.0,
+        "download_ms": 3.0,
+        "total_ms": 251.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 56,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Sites-avon-mx-storefront-catalog/default/dw5985bb14/NXP/195467_1.jpg?sw=300&q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Sites-avon-mx-storefront-catalog/default/dw5985bb14/NXP/195467_1.jpg?sw=300&q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 8407.0,
+        "start_time": 1051.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 252.0,
+        "download_ms": 1.0,
+        "total_ms": 253.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 57,
+        "url": "https://staging-na01.natura.com/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwaf71edfe/11.05_Nueva%20Experiencia/avon-c06_category-manos-y-pies_banner-topo-simple_desk-1920x500.jpg?q=80",
+        "display_url": "/dw/image/v2/BFKR_STG/on/demandware.static/-/Library-Sites-AvonSharedLibrary/default/dwaf71edfe/11.05_Nueva%20Experiencia/avon-c06_category-manos-y-pies_banner-topo-simple_desk-1920x500.jpg?q=80",
+        "host": "staging-na01.natura.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 72357.0,
+        "start_time": 1051.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 270.0,
+        "download_ms": 24.0,
+        "total_ms": 294.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 58,
+        "url": "https://cdn.jsdelivr.net/npm/@naturacosmeticos/natds-icons@latest/dist/fonts/natds-icons.woff2",
+        "display_url": "/npm/@naturacosmeticos/natds-icons@latest/dist/fonts/natds-icons.woff2",
+        "host": "cdn.jsdelivr.net",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Font",
+        "bytes_in": 84240.0,
+        "start_time": 1076.0,
+        "dns_ms": -1.0,
+        "connect_ms": 0.0,
+        "ssl_ms": 31.0,
+        "ttfb_ms": 24.0,
+        "download_ms": 54.0,
+        "total_ms": 109.0,
+        "protocol": "h3",
+        "priority": "Highest"
+      },
+      {
+        "index": 59,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/public/avon/favicon.png",
+        "display_url": "/public/avon/favicon.png",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "404",
+        "type": "Other",
+        "bytes_in": 6860.0,
+        "start_time": 2016.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 248.0,
+        "download_ms": 20.0,
+        "total_ms": 268.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 60,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0pus.qvf-hjt0.js",
+        "display_url": "/_next/static/chunks/0pus.qvf-hjt0.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 736.0,
+        "start_time": 2029.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 88.0,
+        "download_ms": 5.0,
+        "total_ms": 93.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 61,
+        "url": "https://dev.visualwebsiteoptimizer.com/j.php?a=1112042&u=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F&vn=2",
+        "display_url": "/j.php?a=1112042&u=htt...",
+        "host": "dev.visualwebsiteoptimizer.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 4532.0,
+        "start_time": 2276.0,
+        "dns_ms": 6.0,
+        "connect_ms": 5.0,
+        "ssl_ms": 18.0,
+        "ttfb_ms": 31.0,
+        "download_ms": 2.0,
+        "total_ms": 62.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 62,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0knc8jotqi13v.js",
+        "display_url": "/_next/static/chunks/0knc8jotqi13v.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 3527.0,
+        "start_time": 2295.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 128.0,
+        "download_ms": 5.0,
+        "total_ms": 133.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 63,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/029-_i-~g3t0w.js",
+        "display_url": "/_next/static/chunks/029-_i-~g3t0w.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 752.0,
+        "start_time": 2296.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 158.0,
+        "download_ms": 0.0,
+        "total_ms": 158.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 64,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/cabello?_rsc=1r34m",
+        "display_url": "/c/cabello?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 378.0,
+        "start_time": 2339.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 119.0,
+        "download_ms": 2.0,
+        "total_ms": 121.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 65,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/kits?_rsc=1r34m",
+        "display_url": "/c/kits?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 377.0,
+        "start_time": 2345.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 194.0,
+        "download_ms": 1.0,
+        "total_ms": 195.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 66,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/perfumeria?_rsc=1r34m",
+        "display_url": "/c/perfumeria?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 382.0,
+        "start_time": 2345.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 101.0,
+        "download_ms": 3.0,
+        "total_ms": 104.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 67,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/cuerpo?_rsc=1r34m",
+        "display_url": "/c/cuerpo?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 378.0,
+        "start_time": 2345.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 104.0,
+        "download_ms": 4.0,
+        "total_ms": 108.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 68,
+        "url": "https://www.googletagmanager.com/gtm.js?id=GTM-5RBWPQDW",
+        "display_url": "/gtm.js?id=GTM-5RBWPQDW",
+        "host": "www.googletagmanager.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 182358.0,
+        "start_time": 2346.0,
+        "dns_ms": 14.0,
+        "connect_ms": 4.0,
+        "ssl_ms": 20.0,
+        "ttfb_ms": 114.0,
+        "download_ms": 119.0,
+        "total_ms": 271.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 69,
+        "url": "https://dev.visualwebsiteoptimizer.com/collect/v.gif?cd=0&a=1112042&d=ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com&u=D23D22CC8EDE2A0C4A45C0D103CD82357&h=eb71aac5ac3233451c5a3a8da3a67e9f&t=false",
+        "display_url": "/collect/v.gif?cd=0&a=1112042&...",
+        "host": "dev.visualwebsiteoptimizer.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 35.0,
+        "start_time": 2379.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 37.0,
+        "download_ms": 1.0,
+        "total_ms": 38.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 70,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0h470ns.j3ipv.js",
+        "display_url": "/_next/static/chunks/0h470ns.j3ipv.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 176.0,
+        "start_time": 2418.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 114.0,
+        "download_ms": 2.0,
+        "total_ms": 116.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 71,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/05a0qmnfzpvl..js",
+        "display_url": "/_next/static/chunks/05a0qmnfzpvl..js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 209.0,
+        "start_time": 2420.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 108.0,
+        "download_ms": 4.0,
+        "total_ms": 112.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 72,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/16nghp4_135v1.js",
+        "display_url": "/_next/static/chunks/16nghp4_135v1.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 1579.0,
+        "start_time": 2435.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 100.0,
+        "download_ms": 1.0,
+        "total_ms": 101.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 73,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/rostro?_rsc=1r34m",
+        "display_url": "/c/rostro?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 379.0,
+        "start_time": 2541.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 68.0,
+        "download_ms": 1.0,
+        "total_ms": 69.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 74,
+        "url": "https://firebaseinstallations.googleapis.com/v1/projects/app-avon-dev-hml/installations",
+        "display_url": "/v1/projects/app-avon-dev-hml/installations",
+        "host": "firebaseinstallations.googleapis.com",
+        "method": "OPTIONS",
+        "response_code": "200",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 2584.0,
+        "dns_ms": 22.0,
+        "connect_ms": 3.0,
+        "ssl_ms": 25.0,
+        "ttfb_ms": 10.0,
+        "download_ms": 0.0,
+        "total_ms": 60.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 75,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0u_vl2qitq054.js",
+        "display_url": "/_next/static/chunks/0u_vl2qitq054.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 673.0,
+        "start_time": 2585.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 58.0,
+        "download_ms": 3.0,
+        "total_ms": 61.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 76,
+        "url": "https://firebaseinstallations.googleapis.com/v1/projects/app-avon-dev-hml/installations",
+        "display_url": "/v1/projects/app-avon-dev-hml/installations",
+        "host": "firebaseinstallations.googleapis.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 659.0,
+        "start_time": 2595.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 172.0,
+        "download_ms": 1.0,
+        "total_ms": 173.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 77,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/maquillaje?_rsc=1r34m",
+        "display_url": "/c/maquillaje?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 382.0,
+        "start_time": 2639.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 62.0,
+        "download_ms": 1.0,
+        "total_ms": 63.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 78,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/labios?_rsc=1r34m",
+        "display_url": "/c/labios?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 379.0,
+        "start_time": 2655.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 55.0,
+        "download_ms": 2.0,
+        "total_ms": 57.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 79,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/auth/v2/guest-login",
+        "display_url": "/bff-app-avon-mexico/auth/v2/guest-login",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 2662.0,
+        "dns_ms": 71.0,
+        "connect_ms": 13.0,
+        "ssl_ms": 60.0,
+        "ttfb_ms": 246.0,
+        "download_ms": 0.0,
+        "total_ms": 390.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 80,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/casa-y-estilo?_rsc=1r34m",
+        "display_url": "/c/casa-y-estilo?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 383.0,
+        "start_time": 2669.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 231.0,
+        "download_ms": 2.0,
+        "total_ms": 233.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 81,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/promociones?_rsc=1r34m",
+        "display_url": "/c/promociones?_rsc=1r34m",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 381.0,
+        "start_time": 2673.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 232.0,
+        "download_ms": 1.0,
+        "total_ms": 233.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 82,
+        "url": "https://www.googletagmanager.com/gtag/js?id=G-6L509SKSD2&cx=c&gtm=4e66q0h1",
+        "display_url": "/gtag/js?id=G-6L509SKSD2...",
+        "host": "www.googletagmanager.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 150904.0,
+        "start_time": 2790.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 13.0,
+        "download_ms": 88.0,
+        "total_ms": 101.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 83,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/cabello?_rsc=ivliq",
+        "display_url": "/c/cabello?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 8113.0,
+        "start_time": 2883.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 177.0,
+        "download_ms": 27.0,
+        "total_ms": 204.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 84,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/kits?_rsc=ivliq",
+        "display_url": "/c/kits?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 7986.0,
+        "start_time": 2884.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 69.0,
+        "download_ms": 6.0,
+        "total_ms": 75.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 85,
+        "url": "https://cdn.cookielaw.org/consent/40fe31f7-5426-4b8c-8e62-5f4cb4bfaebc/OtAutoBlock.js",
+        "display_url": "/consent/40fe31f7-5426-4b8c-8e62-5f4cb4bfaebc/OtAutoBlock.js",
+        "host": "cdn.cookielaw.org",
+        "method": "GET",
+        "response_code": "404",
+        "type": "Script",
+        "bytes_in": 204.0,
+        "start_time": 2912.0,
+        "dns_ms": 4.0,
+        "connect_ms": 23.0,
+        "ssl_ms": 48.0,
+        "ttfb_ms": 128.0,
+        "download_ms": 1.0,
+        "total_ms": 204.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 86,
+        "url": "https://cdn.cookielaw.org/scripttemplates/otSDKStub.js",
+        "display_url": "/scripttemplates/otSDKStub.js",
+        "host": "cdn.cookielaw.org",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 8776.0,
+        "start_time": 2912.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 25.0,
+        "download_ms": 7.0,
+        "total_ms": 32.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 87,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/perfumeria?_rsc=ivliq",
+        "display_url": "/c/perfumeria?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 8008.0,
+        "start_time": 2936.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 184.0,
+        "download_ms": 5.0,
+        "total_ms": 189.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 88,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/cuerpo?_rsc=ivliq",
+        "display_url": "/c/cuerpo?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 7999.0,
+        "start_time": 2947.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 174.0,
+        "download_ms": 16.0,
+        "total_ms": 190.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 89,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/auth/v2/guest-login",
+        "display_url": "/bff-app-avon-mexico/auth/v2/guest-login",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 1544.0,
+        "start_time": 2973.0,
+        "dns_ms": 0.0,
+        "connect_ms": 13.0,
+        "ssl_ms": 46.0,
+        "ttfb_ms": 279.0,
+        "download_ms": 1.0,
+        "total_ms": 339.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 90,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0idczlsil61af.js",
+        "display_url": "/_next/static/chunks/0idczlsil61af.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 12306.0,
+        "start_time": 2987.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 200.0,
+        "download_ms": 16.0,
+        "total_ms": 216.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 91,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/188chtei.t~.y.js",
+        "display_url": "/_next/static/chunks/188chtei.t~.y.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 10589.0,
+        "start_time": 2992.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 133.0,
+        "download_ms": 13.0,
+        "total_ms": 146.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 92,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/rostro?_rsc=ivliq",
+        "display_url": "/c/rostro?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 7993.0,
+        "start_time": 2993.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 155.0,
+        "download_ms": 18.0,
+        "total_ms": 173.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 93,
+        "url": "https://firebaseremoteconfig.googleapis.com/v1/projects/app-avon-dev-hml/namespaces/firebase:fetch?key=AIzaSyD_5lBEAWOWHWkwT55oPEAhG-l0TZqEbeI",
+        "display_url": "/v1/projects/app-avon-dev-hml/namespaces/firebase:fetch?key=AIzaSyD_5lB...",
+        "host": "firebaseremoteconfig.googleapis.com",
+        "method": "OPTIONS",
+        "response_code": "200",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 3007.0,
+        "dns_ms": 9.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 12.0,
+        "download_ms": 0.0,
+        "total_ms": 21.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 94,
+        "url": "https://firebaseremoteconfig.googleapis.com/v1/projects/app-avon-dev-hml/namespaces/firebase:fetch?key=AIzaSyD_5lBEAWOWHWkwT55oPEAhG-l0TZqEbeI",
+        "display_url": "/v1/projects/app-avon-dev-hml/namespaces/firebase:fetch?key=AIzaSyD_5lB...",
+        "host": "firebaseremoteconfig.googleapis.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 14616.0,
+        "start_time": 3021.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 124.0,
+        "download_ms": 3.0,
+        "total_ms": 127.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 95,
+        "url": "https://cdn.cookielaw.org/consent/40fe31f7-5426-4b8c-8e62-5f4cb4bfaebc/40fe31f7-5426-4b8c-8e62-5f4cb4bfaebc.json",
+        "display_url": "/consent/40fe31f7-5426-4b8c-8e62-5f4cb4bfaebc/40fe31f7-5426-4b8c-8e62-5f4cb4bfaebc.json",
+        "host": "cdn.cookielaw.org",
+        "method": "GET",
+        "response_code": "404",
+        "type": "XHR",
+        "bytes_in": 202.0,
+        "start_time": 3029.0,
+        "dns_ms": 0.0,
+        "connect_ms": 14.0,
+        "ssl_ms": 17.0,
+        "ttfb_ms": 149.0,
+        "download_ms": 1.0,
+        "total_ms": 181.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 96,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/maquillaje?_rsc=ivliq",
+        "display_url": "/c/maquillaje?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 7997.0,
+        "start_time": 3093.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 96.0,
+        "download_ms": 5.0,
+        "total_ms": 101.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 97,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/labios?_rsc=ivliq",
+        "display_url": "/c/labios?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 8019.0,
+        "start_time": 3131.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 751.0,
+        "download_ms": 6.0,
+        "total_ms": 757.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 98,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/casa-y-estilo?_rsc=ivliq",
+        "display_url": "/c/casa-y-estilo?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 8324.0,
+        "start_time": 3152.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 84.0,
+        "download_ms": 2.0,
+        "total_ms": 86.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 99,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/c/promociones?_rsc=ivliq",
+        "display_url": "/c/promociones?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 8058.0,
+        "start_time": 3180.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 81.0,
+        "download_ms": 6.0,
+        "total_ms": 87.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 100,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0ght__cipvbzb.js",
+        "display_url": "/_next/static/chunks/0ght__cipvbzb.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 1634.0,
+        "start_time": 3187.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 128.0,
+        "download_ms": 29.0,
+        "total_ms": 157.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 101,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/?_rsc=ivliq",
+        "display_url": "/?_rsc=ivliq",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 10585.0,
+        "start_time": 3200.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 108.0,
+        "download_ms": 3.0,
+        "total_ms": 111.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 102,
+        "url": "https://s3-sa-east-1.amazonaws.com/frame-image-br/bg.png?x-id=45cdd5bc397be35590ef9b81217cadc3&x-r=&x-s=https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/",
+        "display_url": "/frame-image-br/bg.png?x-id=45cdd5bc39...",
+        "host": "s3-sa-east-1.amazonaws.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 0.0,
+        "start_time": 3219.0,
+        "dns_ms": 24.0,
+        "connect_ms": 144.0,
+        "ssl_ms": 150.0,
+        "ttfb_ms": 169.0,
+        "download_ms": 0.0,
+        "total_ms": 487.0,
+        "protocol": "http/1.1",
+        "priority": "Low"
+      },
+      {
+        "index": 103,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/payments/mercado-pago-key",
+        "display_url": "/bff-app-avon-mexico/payments/mercado-pago-key",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 3271.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 198.0,
+        "download_ms": 0.0,
+        "total_ms": 198.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 104,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/origin-discount/active",
+        "display_url": "/bff-app-avon-mexico/origin-discount/active",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 3276.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 194.0,
+        "download_ms": 0.0,
+        "total_ms": 194.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 105,
+        "url": "https://ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com/_next/static/chunks/0r_6rmqj056hn.js",
+        "display_url": "/_next/static/chunks/0r_6rmqj056hn.js",
+        "host": "ncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Script",
+        "bytes_in": 13915.0,
+        "start_time": 3361.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 137.0,
+        "download_ms": 7.0,
+        "total_ms": 144.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 106,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/payments/mercado-pago-key",
+        "display_url": "/bff-app-avon-mexico/payments/mercado-pago-key",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 51.0,
+        "start_time": 3474.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 75.0,
+        "download_ms": 3.0,
+        "total_ms": 78.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 107,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/origin-discount/active",
+        "display_url": "/bff-app-avon-mexico/origin-discount/active",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "404",
+        "type": "Fetch",
+        "bytes_in": 83.0,
+        "start_time": 3474.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 164.0,
+        "download_ms": 1.0,
+        "total_ms": 165.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 108,
+        "url": "https://dev.visualwebsiteoptimizer.com/events/t/u?en=gtm.GA4entranceSession&a=1112042&_cu=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F",
+        "display_url": "/events/t/u?en=gtm.GA4entra...",
+        "host": "dev.visualwebsiteoptimizer.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Ping",
+        "bytes_in": 20.0,
+        "start_time": 3532.0,
+        "dns_ms": -1.0,
+        "connect_ms": 0.0,
+        "ssl_ms": 0.0,
+        "ttfb_ms": 49.0,
+        "download_ms": 0.0,
+        "total_ms": 49.0,
+        "protocol": "h3",
+        "priority": "Lowest"
+      },
+      {
+        "index": 109,
+        "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-6L509SKSD2&gtm=45je66q0h1v9108086499z89240890652za20gzb9240890652zd9240890652&_p=1782827602463&gcd=13l3l3l3l1l1&npa=0&dma=0&are=1&cid=48513640.1782827604&frm=0&pscdl=noapi&rcb=5&sr=1920x1200&uaa=x86&uab=64&uafvl=%2520Not%2520A%253BBrand%3B99%7CChromium%3B145.0.0.0%7CGoogle%2520Chrome%3B145.0.0.0&uam=Model&uamb=0&uap=Unknown&uapv=0&uaw=0&ul=en-us&_s=1&tag_exp=115938465~115938469~119027224~119576881~119576885~119576891~119576895&dr=&dl=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F&sid=1782827603&sct=1&seg=0&dt=Avon%20M%C3%A9xico&_tu=QA&en=page_view&_fv=1&_nsi=1&_ss=1&ep.loggedUser=false&ep.dsType=none&ep.region=MX&ep.sourceOrigin=Web&ep.content_group=home&ep.company=avon&up.region=MX&up.userSourceOrigin=Web&up.attrib_origins=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F&up.attrib_lastnotsuspect=(direct)%7C(none)%7C(not%20set)%7C(not%20set)%7C(not%20set)&up.attrib_classification=not%20suspect&tfd=3464",
+        "display_url": "/g/collect?v=2&tid=G-6L509...",
+        "host": "www.google-analytics.com",
+        "method": "POST",
+        "response_code": "204",
+        "type": "Fetch",
+        "bytes_in": 0.0,
+        "start_time": 3533.0,
+        "dns_ms": 7.0,
+        "connect_ms": 3.0,
+        "ssl_ms": 10.0,
+        "ttfb_ms": 6.0,
+        "download_ms": 0.0,
+        "total_ms": 26.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 110,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/orders/0cf56c27046da7d38de11514f5?",
+        "display_url": "/bff-app-avon-mexico/orders/0cf56c27046da7d38de11514f5",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 3568.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 74.0,
+        "download_ms": 0.0,
+        "total_ms": 74.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 111,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/pages?cid=global-box-info-web",
+        "display_url": "/bff-app-avon-mexico/pages?cid=global-box-...",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 3568.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 145.0,
+        "download_ms": 0.0,
+        "total_ms": 145.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 112,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/orders/0cf56c27046da7d38de11514f5?",
+        "display_url": "/bff-app-avon-mexico/orders/0cf56c27046da7d38de11514f5",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 817.0,
+        "start_time": 3645.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 239.0,
+        "download_ms": 18.0,
+        "total_ms": 257.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 113,
+        "url": "https://api.mercadopago.com/v1/payment_methods/search?public_key=TEST-e07946be-86bd-4e06-85f2-fd205ad4c13c&locale=en-US&js_version=2.70.2&referer=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com&marketplace=NONE&status=active&product_id=BTR2N61O1F60OR8RLSGG&limit=1&public_key=TEST-e07946be-86bd-4e06-85f2-fd205ad4c13c",
+        "display_url": "/v1/payment_methods/search?public_key=TEST...",
+        "host": "api.mercadopago.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "XHR",
+        "bytes_in": 643.0,
+        "start_time": 3692.0,
+        "dns_ms": 10.0,
+        "connect_ms": 27.0,
+        "ssl_ms": 33.0,
+        "ttfb_ms": 187.0,
+        "download_ms": 1.0,
+        "total_ms": 258.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 114,
+        "url": "https://api.mercadopago.com/v1/devices/widgets?public_key=TEST-e07946be-86bd-4e06-85f2-fd205ad4c13c&locale=en-US&js_version=2.70.2&referer=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com",
+        "display_url": "/v1/devices/widgets?public_key=TEST...",
+        "host": "api.mercadopago.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "XHR",
+        "bytes_in": 11788.0,
+        "start_time": 3692.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 90.0,
+        "download_ms": 28.0,
+        "total_ms": 118.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 115,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/pages?cid=global-box-info-web",
+        "display_url": "/bff-app-avon-mexico/pages?cid=global-box-...",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 355.0,
+        "start_time": 3714.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 202.0,
+        "download_ms": 1.0,
+        "total_ms": 203.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 116,
+        "url": "https://www.mercadolibre.com/jms/lgz/fingerprint/iframe",
+        "display_url": "/jms/lgz/fingerprint/iframe",
+        "host": "www.mercadolibre.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Document",
+        "bytes_in": 2492.0,
+        "start_time": 3966.0,
+        "dns_ms": 47.0,
+        "connect_ms": 15.0,
+        "ssl_ms": 84.0,
+        "ttfb_ms": 59.0,
+        "download_ms": 2.0,
+        "total_ms": 207.0,
+        "protocol": "HTTP/2",
+        "priority": "Highest"
+      },
+      {
+        "index": 117,
+        "url": "https://www.mercadolibre.com/jms/lgz/fingerprint/high/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea",
+        "display_url": "/jms/lgz/fingerprint/high/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea",
+        "host": "www.mercadolibre.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 3966.0,
+        "dns_ms": -1.0,
+        "connect_ms": 16.0,
+        "ssl_ms": 82.0,
+        "ttfb_ms": 63.0,
+        "download_ms": 0.0,
+        "total_ms": 161.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 118,
+        "url": "https://www.mercadolibre.com/jms/lgz/fingerprint/high/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea",
+        "display_url": "/jms/lgz/fingerprint/high/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea",
+        "host": "www.mercadolibre.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 9.0,
+        "start_time": 4121.0,
+        "dns_ms": -1.0,
+        "connect_ms": 13.0,
+        "ssl_ms": 77.0,
+        "ttfb_ms": 59.0,
+        "download_ms": 1.0,
+        "total_ms": 150.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 119,
+        "url": "https://api.mercadolibre.com/tracks",
+        "display_url": "/tracks",
+        "host": "api.mercadolibre.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "XHR",
+        "bytes_in": 98.0,
+        "start_time": 4512.0,
+        "dns_ms": 34.0,
+        "connect_ms": 13.0,
+        "ssl_ms": 55.0,
+        "ttfb_ms": 61.0,
+        "download_ms": 2.0,
+        "total_ms": 165.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 120,
+        "url": "https://www.mercadolivre.com/jms/mlb/lgz/fingerprint/medium/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea?msg=eyJmZWF0dXJlcyI6eyJ0aW1lX3pvbmVfbmFtZSI6IlVUQyIsImFkX2Jsb2NrIjpmYWxzZSwiY2FudmFzIjoiMTBhM2NiZDc3Y2M4NzU5MTkyNWJhNTY2ODMwN2UxMTEiLCJ3ZWJnbCI6bnVsbCwiaW5zdGFsbGVkX2ZvbnRzIjpbIkFuZGFsZSBNb25vIiwiVGltZXMiXSwiZm9udHMiOnsib3MiOjE2MDQwNzQ2ODgsIm90aGVyX29zIjoiW10iLCJub3Rfb3MiOjEwODU1Mzg2MjV9LCJ0aW1lX2Jhc2VkX2ZwIjpudWxsfSwicGVyZm9ybWFuY2UiOnsidGltZV96b25lX25hbWUiOjMuNjAwMDAwMDA4OTQwNjk2NywiYWRfYmxvY2siOjAuNzk5OTk5OTk3MDE5NzY3OCwiY2FudmFzIjo0Ni4yMDAwMDAwMDI5ODAyMywid2ViZ2wiOjExLjg5OTk5OTk5MTA1OTMwMywiaW5zdGFsbGVkX2ZvbnRzIjoyMzYuNjAwMDAwMDA4OTQwNywiZm9udHMiOjI0MC41LCJ0aW1lX2Jhc2VkX2ZwIjoxMy4yOTk5OTk5OTcwMTk3Njh9LCJjb2xsZWN0b3IiOnsidmFsdWUiOiJtZWRpdW0iLCJwZXJmb3JtYW5jZSI6NTUyLjkwMDAwMDAwNTk2MDV9fQ%3D%3D",
+        "display_url": "/jms/mlb/lgz/fingerprint/medium/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea?msg=eyJmZWF0dXJ...",
+        "host": "www.mercadolivre.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 9.0,
+        "start_time": 4524.0,
+        "dns_ms": 79.0,
+        "connect_ms": 0.0,
+        "ssl_ms": 60.0,
+        "ttfb_ms": 45.0,
+        "download_ms": 3.0,
+        "total_ms": 187.0,
+        "protocol": "h3",
+        "priority": "Low"
+      },
+      {
+        "index": 121,
+        "url": "https://dev.visualwebsiteoptimizer.com/events/t/u?en=gtm.viewInfoBox&a=1112042&_cu=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F",
+        "display_url": "/events/t/u?en=gtm.viewInfo...",
+        "host": "dev.visualwebsiteoptimizer.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Ping",
+        "bytes_in": 20.0,
+        "start_time": 4576.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 102.0,
+        "download_ms": 0.0,
+        "total_ms": 102.0,
+        "protocol": "h3",
+        "priority": "Lowest"
+      },
+      {
+        "index": 122,
+        "url": "https://www.mercadolibre.com/jms/lgz/background/etid",
+        "display_url": "/jms/lgz/background/etid",
+        "host": "www.mercadolibre.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Fetch",
+        "bytes_in": 0.0,
+        "start_time": 4604.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 61.0,
+        "download_ms": 0.0,
+        "total_ms": 61.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 123,
+        "url": "https://www.mercadolibre.com/jms/lgz/fingerprint/pixel/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea?msg=eyJmZWF0dXJlcyI6eyJ3ZWJjYW0iOmZhbHNlLCJldGFnIjoiNjQwMmQ0ZWYtNzJkNS00MzBjLTgxMzAtYmVhNjdhZmVjMWM5LTE3ODI4Mjc2MDQ4NjAiLCJpbmNvZ25pdG8iOmZhbHNlLCJqc3V1aWQiOiI3Y2E0YmQ5Yy03N2E4LTQ4MDMtYWY5Mi1kNjQ1M2FiNWNjNDEtMTc4MjgyNzYwMzk4MiIsInN1cHBvcnRfaWRiIjp0cnVlfSwicGVyZm9ybWFuY2UiOnsid2ViY2FtIjoyMjAuNDAwMDAwMDA1OTYwNDYsImV0YWciOjY3LjUsImluY29nbml0byI6MS41LCJqc3V1aWQiOjEuMjk5OTk5OTk3MDE5NzY3OCwiaWRidXVpZCI6MTcuNzAwMDAwMDAyOTgwMjMyLCJzdXBwb3J0X2lkYiI6MH0sImNvbGxlY3RvciI6eyJ2YWx1ZSI6ImxvdyIsInBlcmZvcm1hbmNlIjozMDguNX19",
+        "display_url": "/jms/lgz/fingerprint/pixel/armor.68b38979c28714b2b9aeddcf55452a00047c764436031f74b8d04a452162765e63df7b53147b7684794eb0bb5a28e7e86cb445636aafd372fc319e88f875e165651f8ac312a50cec9a6c4d84989e79c28849443f3e3343b89eec7e316a6a32bc.2b5a94203a7d24a4d5cc3d221f75b8ea?msg=eyJmZWF0dXJ...",
+        "host": "www.mercadolibre.com",
+        "method": "GET",
+        "response_code": "200",
+        "type": "Image",
+        "bytes_in": 9.0,
+        "start_time": 4690.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 58.0,
+        "download_ms": 0.0,
+        "total_ms": 58.0,
+        "protocol": "HTTP/2",
+        "priority": "Low"
+      },
+      {
+        "index": 124,
+        "url": "https://dev.visualwebsiteoptimizer.com/events/t/u?en=gtm.viewHighlightedMenu&a=1112042&_cu=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F",
+        "display_url": "/events/t/u?en=gtm.viewHigh...",
+        "host": "dev.visualwebsiteoptimizer.com",
+        "method": "POST",
+        "response_code": "200",
+        "type": "Ping",
+        "bytes_in": 20.0,
+        "start_time": 6062.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 34.0,
+        "download_ms": 3.0,
+        "total_ms": 37.0,
+        "protocol": "h3",
+        "priority": "Lowest"
+      },
+      {
+        "index": 125,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/pages?cid=live-shopping",
+        "display_url": "/bff-app-avon-mexico/pages?cid=live-shoppi...",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 7434.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 125.0,
+        "download_ms": 0.0,
+        "total_ms": 125.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 126,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/pages?cid=scripts-component",
+        "display_url": "/bff-app-avon-mexico/pages?cid=scripts-com...",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "OPTIONS",
+        "response_code": "204",
+        "type": "Preflight",
+        "bytes_in": 0.0,
+        "start_time": 7434.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 101.0,
+        "download_ms": 0.0,
+        "total_ms": 101.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 127,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/pages?cid=scripts-component",
+        "display_url": "/bff-app-avon-mexico/pages?cid=scripts-com...",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "404",
+        "type": "Fetch",
+        "bytes_in": 88.0,
+        "start_time": 7537.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 166.0,
+        "download_ms": 1.0,
+        "total_ms": 167.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 128,
+        "url": "https://hml-avon-mx.hml.naturacloud.com/bff-app-avon-mexico/pages?cid=live-shopping",
+        "display_url": "/bff-app-avon-mexico/pages?cid=live-shoppi...",
+        "host": "hml-avon-mx.hml.naturacloud.com",
+        "method": "GET",
+        "response_code": "404",
+        "type": "Fetch",
+        "bytes_in": 88.0,
+        "start_time": 7563.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 128.0,
+        "download_ms": 1.0,
+        "total_ms": 129.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      },
+      {
+        "index": 129,
+        "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-6L509SKSD2&gtm=45je66q0h1v9108086499z89240890652za20gzb9240890652zd9240890652&_p=1782827602463&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAAQ&are=1&cid=48513640.1782827604&frm=0&pscdl=noapi&rcb=5&sr=1920x1200&uaa=x86&uab=64&uafvl=%2520Not%2520A%253BBrand%3B99%7CChromium%3B145.0.0.0%7CGoogle%2520Chrome%3B145.0.0.0&uam=Model&uamb=0&uap=Unknown&uapv=0&uaw=0&ul=en-us&tag_exp=115938465~115938469~119027224~119576881~119576885~119576891~119576895&dr=&dl=https%3A%2F%2Fncf-ssr-avon-mexico-akamai.natura-mx-jcf-hml.naturacloud.com%2F&sid=1782827603&sct=1&seg=0&dt=Avon%20M%C3%A9xico&_tu=QA&_s=2&tfd=8552",
+        "display_url": "/g/collect?v=2&tid=G-6L509...",
+        "host": "www.google-analytics.com",
+        "method": "POST",
+        "response_code": "204",
+        "type": "Fetch",
+        "bytes_in": 0.0,
+        "start_time": 8551.0,
+        "dns_ms": -1.0,
+        "connect_ms": -1.0,
+        "ssl_ms": -1.0,
+        "ttfb_ms": 5.0,
+        "download_ms": 0.0,
+        "total_ms": 5.0,
+        "protocol": "HTTP/2",
+        "priority": "High"
+      }
+    ]
+  }
+};
+        
+        let currentFilter = 'all';
+        let charts = {};
+        let comparisonCharts = {};
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatMs(ms) {
+            if (ms < 1000) return Math.round(ms) + ' ms';
+            return (ms / 1000).toFixed(2) + ' s';
+        }
+
+        function getTimingBadge(valueMs, type) {
+            let label = 'OK';
+            let statusClass = 'status-ok';
+            
+            if (type === 'ttfb') {
+                if (valueMs <= 800) {
+                    label = 'GOOD';
+                    statusClass = 'status-good';
+                } else if (valueMs > 1800) {
+                    label = 'BAD';
+                    statusClass = 'status-bad';
+                }
+            } else if (type === 'doc') {
+                if (valueMs <= 1800) {
+                    label = 'GOOD';
+                    statusClass = 'status-good';
+                } else if (valueMs > 3500) {
+                    label = 'BAD';
+                    statusClass = 'status-bad';
+                }
+            } else if (type === 'fully') {
+                if (valueMs <= 3000) {
+                    label = 'GOOD';
+                    statusClass = 'status-good';
+                } else if (valueMs > 6000) {
+                    label = 'BAD';
+                    statusClass = 'status-bad';
+                }
+            }
+            
+            return `<span class="status-badge ${statusClass}">${label}</span>`;
+        }
+
+        // Initialize view selectors
+        const selector = document.getElementById('run-selector');
+        const viewKeys = Object.keys(reportData);
+        
+        if (viewKeys.length > 1) {
+            const opt = document.createElement('option');
+            opt.value = 'comparison';
+            opt.textContent = '📊 Compare All Targets';
+            selector.appendChild(opt);
+        }
+        
+        viewKeys.forEach(viewName => {
+            const opt = document.createElement('option');
+            opt.value = viewName;
+            opt.textContent = viewName;
+            selector.appendChild(opt);
+        });
+        
+        let currentView = viewKeys.length > 1 ? 'comparison' : viewKeys[0];
+
+        // Render Comparison charts and tables
+        function renderComparison() {
+            if (typeof Chart === 'undefined') {
+                console.warn("Chart.js is not loaded. Skipping chart rendering.");
+                return;
+            }
+            const tbody = document.querySelector('#comparison-table tbody');
+            tbody.innerHTML = '';
+            
+            const labels = [];
+            const ttfbData = [];
+            const loadData = [];
+            const fullyData = [];
+            const weightData = [];
+            
+            Object.entries(reportData).forEach(([domain, data]) => {
+                const sum = data.summary;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${domain}</strong></td>
+                    <td>${sum.total_requests}</td>
+                    <td>${formatMs(sum.calculated_ttfb_ms)} ${getTimingBadge(sum.calculated_ttfb_ms, 'ttfb')}</td>
+                    <td>${formatMs(sum.base_load_ms)} ${getTimingBadge(sum.base_load_ms, 'doc')}</td>
+                    <td>${formatMs(sum.fully_loaded_ms)} ${getTimingBadge(sum.fully_loaded_ms, 'fully')}</td>
+                    <td><strong>${formatBytes(sum.total_bytes_in)}</strong></td>
+                    <td>${sum.avg_cache_score >= 0 ? Math.round(sum.avg_cache_score) : 'N/A'}</td>
+                    <td>${sum.avg_cdn_score >= 0 ? Math.round(sum.avg_cdn_score) : 'N/A'}</td>
+                    <td>${sum.avg_gzip_score >= 0 ? Math.round(sum.avg_gzip_score) : 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+                
+                labels.push(domain);
+                ttfbData.push(sum.calculated_ttfb_ms);
+                loadData.push(sum.base_load_ms);
+                fullyData.push(sum.fully_loaded_ms);
+                weightData.push(sum.total_bytes_in / 1024); // Convert to KB
+            });
+            
+            // Render Timing Comparison Chart
+            if (comparisonCharts.timings) comparisonCharts.timings.destroy();
+            comparisonCharts.timings = new Chart(document.getElementById('chart-compare-timings'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'TTFB',
+                            data: ttfbData,
+                            backgroundColor: '#8b5cf6', // purple
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Doc Load',
+                            data: loadData,
+                            backgroundColor: '#06b6d4', // cyan
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Fully Loaded',
+                            data: fullyData,
+                            backgroundColor: '#3b82f6', // blue
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            ticks: { color: '#9ca3af' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        x: {
+                            ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 45 },
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af', font: { family: 'Inter', size: 10 } } }
+                    }
+                }
+            });
+            
+            // Render Weight Comparison Chart
+            if (comparisonCharts.weight) comparisonCharts.weight.destroy();
+            comparisonCharts.weight = new Chart(document.getElementById('chart-compare-weight'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Page Weight (KB)',
+                        data: weightData,
+                        backgroundColor: '#10b981', // green
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            ticks: { color: '#9ca3af' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
+                        },
+                        x: {
+                            ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 45 },
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Switch active view
+        function switchView(viewName) {
+            currentView = viewName;
+            
+            const comparisonSection = document.getElementById('comparison-section');
+            const individualSections = [
+                document.querySelector('.metrics-grid'),
+                document.querySelector('.dashboard-layout'),
+                document.querySelector('.waterfall-card')
+            ];
+            
+            if (viewName === 'comparison') {
+                // Show comparison, hide others
+                comparisonSection.style.display = 'block';
+                individualSections.forEach(el => { if (el) el.style.display = 'none'; });
+                document.getElementById('dashboard-subtitle').textContent = "Consolidated Performance Comparison";
+                renderComparison();
+            } else {
+                // Show others, hide comparison
+                comparisonSection.style.display = 'none';
+                individualSections.forEach(el => { if (el) {
+                    if (el.classList.contains('metrics-grid')) el.style.display = 'grid';
+                    else if (el.classList.contains('dashboard-layout')) el.style.display = 'grid';
+                    else el.style.display = 'block';
+                }});
+                
+                const data = reportData[viewName];
+                
+                // Subtitle
+                document.getElementById('dashboard-subtitle').textContent = `Metrics for ${viewName}`;
+
+                // Key Metrics
+                document.getElementById('val-ttfb').innerHTML = `${formatMs(data.summary.calculated_ttfb_ms)} ${getTimingBadge(data.summary.calculated_ttfb_ms, 'ttfb')}`;
+                document.getElementById('val-doc-load').innerHTML = `${formatMs(data.summary.base_load_ms)} ${getTimingBadge(data.summary.base_load_ms, 'doc')}`;
+                document.getElementById('val-fully-loaded').innerHTML = `${formatMs(data.summary.fully_loaded_ms)} ${getTimingBadge(data.summary.fully_loaded_ms, 'fully')}`;
+                document.getElementById('val-bytes').textContent = formatBytes(data.summary.total_bytes_in);
+                document.getElementById('val-requests').textContent = data.summary.total_requests;
+                document.getElementById('val-cpu').textContent = formatMs(data.summary.total_cpu_ms);
+
+                // Optimization Scores
+                renderScore('score-cache', data.summary.avg_cache_score);
+                renderScore('score-cdn', data.summary.avg_cdn_score);
+                renderScore('score-gzip', data.summary.avg_gzip_score);
+
+                // Tables
+                renderResourcesTable(data.resources);
+                renderDomainsTable(data.domains, data.summary.total_bytes_in);
+
+                // Charts
+                renderCharts(data.resources);
+
+                // Waterfall
+                updateWaterfall();
+            }
+        }
+
+        function renderScore(elemId, score) {
+            const elem = document.getElementById(elemId);
+            if (score < 0) {
+                elem.textContent = 'N/A';
+                elem.className = 'score-circle score-avg';
+                return;
+            }
+            elem.textContent = Math.round(score);
+            elem.className = 'score-circle ' + (score >= 85 ? 'score-good' : (score >= 50 ? 'score-avg' : 'score-poor'));
+        }
+
+        function renderResourcesTable(resources) {
+            const tbody = document.querySelector('#resources-table tbody');
+            tbody.innerHTML = '';
+            
+            Object.entries(resources)
+                .sort((a,b) => b[1].bytes_in - a[1].bytes_in)
+                .forEach(([type, stats]) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${type}</strong></td>
+                        <td>${stats.count}</td>
+                        <td>${formatBytes(stats.bytes_in)}</td>
+                        <td>${formatMs(stats.avg_duration_ms)}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+        }
+
+        function renderDomainsTable(domains, totalBytes) {
+            const tbody = document.querySelector('#domains-table tbody');
+            tbody.innerHTML = '';
+            
+            domains.slice(0, 12).forEach(([domain, stats]) => {
+                const pct = totalBytes > 0 ? (stats.bytes_in / totalBytes * 100) : 0;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;">${domain}</span>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: ${pct}%"></div>
+                        </div>
+                    </td>
+                    <td style="text-align: right; vertical-align: middle;">
+                        <strong>${formatBytes(stats.bytes_in)}</strong>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">${pct.toFixed(1)}% (${stats.count} reqs)</div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function renderCharts(resources) {
+            if (typeof Chart === 'undefined') {
+                console.warn("Chart.js is not loaded. Skipping chart rendering.");
+                return;
+            }
+            const labels = [];
+            const reqCounts = [];
+            const byteCounts = [];
+            const colors = {
+                'Document': '#8b5cf6', // purple
+                'Stylesheet': '#06b6d4', // cyan
+                'Script': '#f97316', // orange
+                'Image': '#10b981', // green
+                'Font': '#eab308', // gold
+                'Xhr': '#3b82f6', // blue
+                'Fetch': '#3b82f6',
+                'Ping': '#ec4899', // pink
+                'Preflight': '#6b7280', // gray
+                'Other': '#9ca3af'
+            };
+            const chartColors = [];
+
+            Object.entries(resources).forEach(([type, stats]) => {
+                labels.push(type);
+                reqCounts.push(stats.count);
+                byteCounts.push(stats.bytes_in);
+                chartColors.push(colors[type] || '#6b7280');
+            });
+
+            if (charts.requests) charts.requests.destroy();
+            if (charts.bytes) charts.bytes.destroy();
+
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#9ca3af', font: { family: 'Inter', size: 9 } }
+                    }
+                }
+            };
+
+            charts.requests = new Chart(document.getElementById('chart-requests'), {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: reqCounts,
+                        backgroundColor: chartColors,
+                        borderWidth: 1,
+                        borderColor: '#0b0f19'
+                    }]
+                },
+                options: chartOptions
+            });
+
+            charts.bytes = new Chart(document.getElementById('chart-bytes'), {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: byteCounts,
+                        backgroundColor: chartColors,
+                        borderWidth: 1,
+                        borderColor: '#0b0f19'
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    plugins: {
+                        ...chartOptions.plugins,
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': ' + formatBytes(context.parsed);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function filterType(type) {
+            currentFilter = type;
+            document.querySelectorAll('#wf-filters button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            updateWaterfall();
+        }
+
+        const tooltip = document.getElementById('bar-tooltip');
+
+        function showTooltip(e, req) {
+            tooltip.style.display = 'block';
+            tooltip.innerHTML = `
+                <div class="tooltip-title">${req.url}</div>
+                <div class="tooltip-row"><span class="tooltip-label">Method / Response</span><span class="tooltip-val">${req.method} / ${req.response_code}</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">Start Time</span><span class="tooltip-val">${formatMs(req.start_time)}</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">Total Duration</span><span class="tooltip-val" style="color: var(--accent-cyan)">${formatMs(req.total_ms)}</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">Size (Bytes In)</span><span class="tooltip-val">${formatBytes(req.bytes_in)}</span></div>
+                ${req.dns_ms > 0 ? `<div class="tooltip-row"><span class="tooltip-label">DNS Lookup</span><span class="tooltip-val" style="color: var(--accent-yellow)">${formatMs(req.dns_ms)}</span></div>` : ''}
+                ${req.connect_ms > 0 ? `<div class="tooltip-row"><span class="tooltip-label">Connection</span><span class="tooltip-val" style="color: var(--accent-orange)">${formatMs(req.connect_ms)}</span></div>` : ''}
+                ${req.ssl_ms > 0 ? `<div class="tooltip-row"><span class="tooltip-label">SSL Negotiation</span><span class="tooltip-val" style="color: var(--accent-red)">${formatMs(req.ssl_ms)}</span></div>` : ''}
+                <div class="tooltip-row"><span class="tooltip-label">TTFB</span><span class="tooltip-val" style="color: var(--accent-purple)">${formatMs(req.ttfb_ms)}</span></div>
+                <div class="tooltip-row"><span class="tooltip-label">Content Download</span><span class="tooltip-val" style="color: var(--accent-blue)">${formatMs(req.download_ms)}</span></div>
+            `;
+            moveTooltip(e);
+        }
+
+        function moveTooltip(e) {
+            tooltip.style.left = (e.pageX + 15) + 'px';
+            tooltip.style.top = (e.pageY + 15) + 'px';
+        }
+
+        function hideTooltip() {
+            tooltip.style.display = 'none';
+        }
+
+        function updateWaterfall() {
+            const data = reportData[currentView];
+            if (!data) return;
+            const search = document.getElementById('wf-search').value.toLowerCase();
+            const container = document.getElementById('waterfall-rows');
+            container.innerHTML = '';
+
+            const maxTime = data.summary.fully_loaded_ms;
+
+            const filtered = data.waterfall.filter(req => {
+                const matchesSearch = req.url.toLowerCase().includes(search) || req.host.toLowerCase().includes(search);
+                if (!matchesSearch) return false;
+
+                if (currentFilter === 'all') return true;
+                const rType = req.type.toLowerCase();
+                
+                if (currentFilter === 'xhr') {
+                    return rType === 'xhr' || rType === 'fetch';
+                }
+                if (currentFilter === 'other') {
+                    return rType !== 'document' && rType !== 'stylesheet' && rType !== 'script' && rType !== 'image' && rType !== 'font' && rType !== 'xhr' && rType !== 'fetch';
+                }
+                return rType === currentFilter;
+            });
+
+            filtered.forEach(req => {
+                const row = document.createElement('div');
+                row.className = 'wf-row';
+
+                const typeLower = req.type.toLowerCase();
+                let badgeClass = 'badge-other';
+                if (typeLower === 'document') badgeClass = 'badge-doc';
+                else if (typeLower === 'stylesheet') badgeClass = 'badge-css';
+                else if (typeLower === 'script') badgeClass = 'badge-js';
+                else if (typeLower === 'image') badgeClass = 'badge-img';
+                else if (typeLower === 'font') badgeClass = 'badge-font';
+                else if (typeLower === 'xhr' || typeLower === 'fetch') badgeClass = 'badge-xhr';
+
+                const leftPercent = maxTime > 0 ? (req.start_time / maxTime * 100) : 0;
+                const widthPercent = maxTime > 0 ? (req.total_ms / maxTime * 100) : 0;
+
+                const totalTiming = req.total_ms || 1;
+                const dnsW = (req.dns_ms / totalTiming * 100);
+                const connW = (req.connect_ms / totalTiming * 100);
+                const sslW = (req.ssl_ms / totalTiming * 100);
+                const ttfbW = (req.ttfb_ms / totalTiming * 100);
+                const dlW = (req.download_ms / totalTiming * 100);
+
+                row.innerHTML = `
+                    <div class="wf-cell wf-index">${req.index}</div>
+                    <div class="wf-cell" style="overflow: visible;">
+                        <span class="wf-badge ${badgeClass}">${req.type}</span>
+                    </div>
+                    <div class="wf-cell" style="overflow: hidden; text-overflow: ellipsis;">
+                        <span class="wf-url-text" title="${req.url}">${req.display_url}</span>
+                        <span class="wf-url-host">${req.host} (${req.method} - ${req.response_code})</span>
+                    </div>
+                    <div class="wf-cell wf-timeline-cell">
+                        <div class="wf-bar" style="left: ${leftPercent}%; width: ${Math.max(widthPercent, 0.4)}%">
+                            ${req.dns_ms > 0 ? `<div class="segment-dns" style="width: ${dnsW}%"></div>` : ''}
+                            ${req.connect_ms > 0 ? `<div class="segment-connect" style="width: ${connW}%"></div>` : ''}
+                            ${req.ssl_ms > 0 ? `<div class="segment-ssl" style="width: ${sslW}%"></div>` : ''}
+                            <div class="segment-ttfb" style="width: ${ttfbW}%"></div>
+                            <div class="segment-download" style="width: ${dlW}%"></div>
+                        </div>
+                    </div>
+                `;
+
+                const bar = row.querySelector('.wf-bar');
+                bar.addEventListener('mouseenter', (e) => showTooltip(e, req));
+                bar.addEventListener('mousemove', (e) => moveTooltip(e));
+                bar.addEventListener('mouseleave', () => hideTooltip());
+
+                container.appendChild(row);
+            });
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.9rem;">
+                        No requests match the active search or type filter.
+                    </div>
+                `;
+            }
+        }
+
+        switchView(currentView);
+    </script>
+</body>
+</html>
