@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:;">
+  <title>PageSpeed & Network Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+  <!-- Titlebar Drag Area for macOS hiddenInset -->
+  <div class="window-titlebar"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <h1>PageSpeed <span class="accent-text">& Network</span></h1>
+        <span class="badge-version">v1.0 • Desktop</span>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="live-clock-card" id="clockCard" title="Horário do Sistema">
+        <span class="clock-icon">🕒</span>
+        <span class="clock-time" id="clockTime">--:--:--</span>
+        <span class="clock-date" id="clockDate">--/--/----</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- User Profile / Login Widget -->
+      <div class="user-session-widget" id="userWidget">
+        <button class="btn btn-secondary btn-sm" id="btnLogin">
+          <span class="btn-icon">👤</span>
+          <span id="userLabel">Entrar</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="app-main">
+    <!-- URL Input & Audit Control Bar -->
+    <section class="url-control-section">
+      <form id="auditForm" class="url-form">
+        <div class="url-input-wrapper">
+          <span class="input-icon">🌐</span>
+          <input 
+            type="text" 
+            id="urlInput" 
+            class="url-input" 
+            placeholder="Insira a URL para analisar (Ex: pagespeed.web.dev ou https://github.com)" 
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+          <button type="button" class="btn-clear" id="btnClearUrl" title="Limpar URL">✕</button>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="btnAudit">
+          <span class="btn-icon" id="auditBtnIcon">🚀</span>
+          <span id="auditBtnText">Analisar Site</span>
+        </button>
+
+        <button type="button" class="btn btn-danger hidden" id="btnStop">
+          <span class="btn-icon">⏹</span>
+          <span>Interromper</span>
+        </button>
+      </form>
+
+      <!-- Quick Presets -->
+      <div class="preset-links">
+        <span class="preset-label">Exemplos rápidos:</span>
+        <button class="preset-tag" data-url="https://pagespeed.web.dev">pagespeed.web.dev</button>
+        <button class="preset-tag" data-url="https://github.com">github.com</button>
+        <button class="preset-tag" data-url="https://wikipedia.org">wikipedia.org</button>
+        <button class="preset-tag" data-url="https://news.ycombinator.com">news.ycombinator.com</button>
+      </div>
+
+      <!-- Live Audit Status Banner -->
+      <div class="audit-status-banner hidden" id="auditStatusBanner">
+        <div class="status-indicator-dot pulse"></div>
+        <span class="status-message" id="statusMessage">Pronto para iniciar auditoria</span>
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Performance & Core Web Vitals Panel -->
+    <section class="vitals-panel">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <h2>📊 Desempenho & Core Web Vitals</h2>
+          <span class="panel-subtitle">Diagnóstico em tempo real calibrado com os thresholds do Google PageSpeed</span>
+        </div>
+        <div class="vitals-meta" id="vitalsMeta">
+          <span class="meta-item">Status: <strong id="auditStateLabel">Aguardando</strong></span>
+        </div>
+      </div>
+
+      <div class="vitals-grid">
+        <!-- Overall Score Card -->
+        <div class="vital-card score-card" id="overallScoreCard">
+          <div class="score-circle-wrapper">
+            <svg class="score-svg" viewBox="0 0 120 120">
+              <circle class="score-circle-bg" cx="60" cy="60" r="50"></circle>
+              <circle class="score-circle-progress" id="scoreCircle" cx="60" cy="60" r="50"></circle>
+            </svg>
+            <div class="score-center-text">
+              <span class="score-value" id="scoreValue">--</span>
+              <span class="score-subtext">Score</span>
+            </div>
+          </div>
+          <div class="score-details">
+            <span class="score-title">Pontuação Geral</span>
+            <span class="score-status-badge" id="scoreBadge">Sem dados</span>
+          </div>
+        </div>
+
+        <!-- LCP Card -->
+        <div class="vital-card" id="cardLCP">
+          <div class="card-top">
+            <span class="metric-abbr">LCP</span>
+            <span class="metric-badge" id="badgeLCP">--</span>
+          </div>
+          <div class="metric-value-wrapper">
+            <span class="metric-value" id="valLCP">--</span>
+            <span class="metric-unit">ms</span>
+          </div>
+          <div class="card-bottom">
+            <span class="metric-name">Largest Contentful Paint</span>
+            <span class="metric-guide">Meta: ≤ 2.5 s</span>
+          </div>
+        </div>
+
+        <!-- FCP Card -->
+        <div class="vital-card" id="cardFCP">
+          <div class="card-top">
+            <span class="metric-abbr">FCP</span>
+            <span class="metric-badge" id="badgeFCP">--</span>
+          </div>
+          <div class="metric-value-wrapper">
+            <span class="metric-value" id="valFCP">--</span>
+            <span class="metric-unit">ms</span>
+          </div>
+          <div class="card-bottom">
+            <span class="metric-name">First Contentful Paint</span>
+            <span class="metric-guide">Meta: ≤ 1.8 s</span>
+          </div>
+        </div>
+
+        <!-- CLS Card -->
+        <div class="vital-card" id="cardCLS">
+          <div class="card-top">
+            <span class="metric-abbr">CLS</span>
+            <span class="metric-badge" id="badgeCLS">--</span>
+          </div>
+          <div class="metric-value-wrapper">
+            <span class="metric-value" id="valCLS">--</span>
+            <span class="metric-unit">score</span>
+          </div>
+          <div class="card-bottom">
+            <span class="metric-name">Cumulative Layout Shift</span>
+            <span class="metric-guide">Meta: ≤ 0.1</span>
+          </div>
+        </div>
+
+        <!-- TTFB Card -->
+        <div class="vital-card" id="cardTTFB">
+          <div class="card-top">
+            <span class="metric-abbr">TTFB</span>
+            <span class="metric-badge" id="badgeTTFB">--</span>
+          </div>
+          <div class="metric-value-wrapper">
+            <span class="metric-value" id="valTTFB">--</span>
+            <span class="metric-unit">ms</span>
+          </div>
+          <div class="card-bottom">
+            <span class="metric-name">Time to First Byte</span>
+            <span class="metric-guide">Meta: ≤ 800 ms</span>
+          </div>
+        </div>
+
+        <!-- Summary Stats Card -->
+        <div class="vital-card stats-summary-card">
+          <div class="summary-row">
+            <span class="summary-label">Total Requisições:</span>
+            <span class="summary-val" id="summaryTotalReqs">0</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Tamanho Transferido:</span>
+            <span class="summary-val" id="summaryTotalBytes">0 B</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Tempo Total:</span>
+            <span class="summary-val" id="summaryLoadTime">--</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Falhas / Erros:</span>
+            <span class="summary-val text-danger" id="summaryFailedReqs">0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-time Network Stream Panel -->
+    <section class="network-stream-section">
+      <div class="stream-toolbar">
+        <div class="toolbar-left">
+          <h3>📡 Requisições de Rede & APIs em Tempo Real</h3>
+          <span class="requests-counter" id="reqCounter">0 requisições capturadas</span>
+        </div>
+
+        <div class="toolbar-filters">
+          <div class="filter-buttons" id="filterTabs">
+            <button class="filter-tab active" data-filter="all">Todos <span class="tab-count" id="countAll">0</span></button>
+            <button class="filter-tab" data-filter="fetch">Fetch / XHR <span class="tab-count" id="countFetch">0</span></button>
+            <button class="filter-tab" data-filter="script">JS <span class="tab-count" id="countScript">0</span></button>
+            <button class="filter-tab" data-filter="stylesheet">CSS <span class="tab-count" id="countCss">0</span></button>
+            <button class="filter-tab" data-filter="image">Img <span class="tab-count" id="countImg">0</span></button>
+            <button class="filter-tab" data-filter="font">Fontes <span class="tab-count" id="countFont">0</span></button>
+            <button class="filter-tab" data-filter="document">Doc <span class="tab-count" id="countDoc">0</span></button>
+          </div>
+
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchFilter" class="search-input" placeholder="Filtrar por URL, método...">
+          </div>
+        </div>
+      </div>
+
+      <!-- Network Table Container -->
+      <div class="table-container">
+        <table class="network-table" id="networkTable">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Status</th>
+              <th style="width: 80px;">Método</th>
+              <th>Nome / Endpoint</th>
+              <th style="width: 100px;">Tipo</th>
+              <th style="width: 100px;">Tamanho</th>
+              <th style="width: 100px;">Duração</th>
+              <th style="width: 140px;">Cascata (Timeline)</th>
+            </tr>
+          </thead>
+          <tbody id="networkTableBody">
+            <!-- Populated dynamically -->
+            <tr class="empty-state-row" id="emptyStateRow">
+              <td colspan="7">
+                <div class="empty-state">
+                  <div class="empty-icon">🌐</div>
+                  <div class="empty-title">Nenhuma requisição monitorada ainda</div>
+                  <div class="empty-desc">Insira uma URL acima e clique em 'Analisar Site' para acompanhar chamadas de APIs e download de recursos em tempo real.</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Login Modal -->
+  <div class="modal-backdrop hidden" id="loginModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🔐 Autenticação de Usuário</h3>
+        <button class="btn-close-modal" id="btnCloseModal">✕</button>
+      </div>
+      <form id="loginForm" class="modal-form">
+        <div class="form-group">
+          <label for="inputEmail">E-mail ou Usuário:</label>
+          <input type="text" id="inputEmail" class="form-input" placeholder="seu.usuario@exemplo.com" required>
+        </div>
+        <div class="form-group">
+          <label for="inputPassword">Senha:</label>
+          <input type="password" id="inputPassword" class="form-input" placeholder="••••••••" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnCancelLogin">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Entrar no Sistema</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

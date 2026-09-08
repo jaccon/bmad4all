@@ -1,0 +1,25 @@
+{
+  "name": "electron-pagespeed-network-monitor",
+  "version": "1.0.0",
+  "description": "Desktop Application in Electron with Dark Mode for real-time Network and PageSpeed/Core Web Vitals monitoring",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/",
+    "check": "node --check src/main/main.js src/main/auditor.js src/preload/preload.js src/renderer/renderer.js"
+  },
+  "keywords": [
+    "electron",
+    "pagespeed",
+    "devtools",
+    "network-monitor",
+    "web-vitals",
+    "lcp",
+    "dark-mode"
+  ],
+  "author": "Antigravity & Jaccon",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}
