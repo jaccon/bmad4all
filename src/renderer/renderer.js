@@ -660,14 +660,15 @@
     }
   }
 
-  function triggerBounceEffect(el) {
-    if (!el) return;
-    el.classList.remove('btn-bounce-blue');
-    void el.offsetWidth; // force DOM reflow
-    el.classList.add('btn-bounce-blue');
+  function triggerUrlBounce() {
+    const urlWrapper = document.querySelector('.url-input-wrapper');
+    if (!urlWrapper) return;
+    urlWrapper.classList.remove('url-bounce-blue');
+    void urlWrapper.offsetWidth; // force DOM reflow
+    urlWrapper.classList.add('url-bounce-blue');
     setTimeout(() => {
-      el.classList.remove('btn-bounce-blue');
-    }, 520);
+      urlWrapper.classList.remove('url-bounce-blue');
+    }, 480);
   }
 
   function setupAuditControls() {
@@ -675,13 +676,13 @@
 
     auditForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      triggerBounceEffect(btnAudit);
+      triggerUrlBounce();
       triggerAudit(urlInput.value);
     });
 
     if (btnAudit) {
       btnAudit.addEventListener('click', () => {
-        triggerBounceEffect(btnAudit);
+        triggerUrlBounce();
       });
     }
 

@@ -307,40 +307,37 @@ button,
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25), 0 0 18px rgba(56, 189, 248, 0.4);
 }
 
-/* Start Inspect Bounce Effect in Blue */
-@keyframes bounceBlue {
+/* Subtle Blue Bounce Effect on URL Border */
+@keyframes urlBorderBounce {
   0% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.8);
+    border-color: #0284c7;
+    box-shadow: 0 0 10px rgba(2, 132, 199, 0.22);
   }
-  20% {
-    transform: scale(0.91);
-    box-shadow: 0 0 18px 4px rgba(56, 189, 248, 0.95), 0 0 35px rgba(2, 132, 199, 0.7);
+  25% {
+    transform: scale(1.012);
     border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.35), 0 0 20px rgba(56, 189, 248, 0.45);
   }
-  45% {
-    transform: scale(1.09);
-    box-shadow: 0 0 28px 8px rgba(56, 189, 248, 0.95), 0 0 55px rgba(2, 132, 199, 0.85);
-    border-color: #7dd3fc;
+  50% {
+    transform: scale(0.996);
+    border-color: #0284c7;
+    box-shadow: 0 0 0 1.5px rgba(56, 189, 248, 0.25), 0 0 12px rgba(2, 132, 199, 0.3);
   }
-  70% {
-    transform: scale(0.97);
-    box-shadow: 0 0 16px 3px rgba(56, 189, 248, 0.6);
+  75% {
+    transform: scale(1.004);
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.28), 0 0 14px rgba(56, 189, 248, 0.35);
   }
   100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+    border-color: #0284c7;
+    box-shadow: 0 0 10px rgba(2, 132, 199, 0.22);
   }
 }
 
-.btn-bounce-blue {
-  animation: bounceBlue 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
-}
-
-#btnAudit:active {
-  transform: scale(0.92);
-  box-shadow: 0 0 22px rgba(56, 189, 248, 0.95), 0 0 40px rgba(2, 132, 199, 0.8);
-  border-color: #38bdf8;
+.url-bounce-blue {
+  animation: urlBorderBounce 0.45s cubic-bezier(0.25, 1, 0.5, 1) !important;
 }
 
 .input-icon-label {
