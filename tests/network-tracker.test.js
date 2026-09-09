@@ -220,4 +220,35 @@ describe('NetworkTracker', () => {
     assert.equal(item.protocol, 'h2');
     assert.equal(item.remoteIPAddress, '192.0.2.1');
   });
+
+  test('tracks progressive data received via onDataReceived', () => {
+    const tracker = new NetworkTracker();
+
+    tracker.onRequestWillBeSent({
+      requestId: 'req-chunked',
+      request: { url: 'https://api.example.com/stream', method: 'GET' },
+      type: 'Fetch',
+      timestamp: 10.0
+    });
+
+    tracker.onDataReceived({
+      requestId: 'req-chunked',
+      dataLength: 512,
+      timestamp: 10.2
+    });
+
+    let item = tracker.getRequests()[0];
+    assert.equal(item.encodedDataLength, 512);
+    assert.equal(tracker.getStats().totalBytes, 512);
+
+    tracker.onDataReceived({
+      requestId: 'req-chunked',
+      dataLength: 512,
+      timestamp: 10.4
+    });
+
+    item = tracker.getRequests()[0];
+    assert.equal(item.encodedDataLength, 1024);
+    assert.equal(tracker.getStats().totalBytes, 1024);
+  });
 });

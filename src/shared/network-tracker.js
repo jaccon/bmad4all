@@ -162,6 +162,29 @@ class NetworkTracker {
     return record;
   }
 
+  onDataReceived(params) {
+    if (!params || !params.requestId) return null;
+    const { requestId, dataLength, encodedDataLength, timestamp } = params;
+    const record = this.requests.get(requestId);
+    if (!record) return null;
+
+    const len = (typeof encodedDataLength === 'number' && !isNaN(encodedDataLength) && encodedDataLength > 0)
+      ? encodedDataLength
+      : ((typeof dataLength === 'number' && !isNaN(dataLength) && dataLength > 0) ? (record.encodedDataLength + dataLength) : 0);
+
+    if (len > record.encodedDataLength) {
+      const addedBytes = len - record.encodedDataLength;
+      record.encodedDataLength = len;
+      this.stats.totalBytes += addedBytes;
+    }
+
+    if (timestamp && record.startMonotonic > 0) {
+      record.durationMs = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+    }
+
+    return record;
+  }
+
   onLoadingFinished(params) {
     if (!params || !params.requestId) return null;
     const { requestId, encodedDataLength, timestamp } = params;

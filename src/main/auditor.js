@@ -156,7 +156,8 @@ class SiteAuditor {
         webPreferences: {
           contextIsolation: true,
           nodeIntegration: false,
-          sandbox: true
+          sandbox: true,
+          backgroundThrottling: false
         }
       });
 
@@ -184,8 +185,15 @@ class SiteAuditor {
         });
       });
 
+      // Crucial: initialize renderer target with about:blank before attaching CDP debugger
       try {
-        wc.debugger.attach('1.3');
+        await this.targetWindow.loadURL('about:blank');
+      } catch (blankErr) {
+        // Ignored, proceed to attach
+      }
+
+      try {
+        wc.debugger.attach();
         this.attachedDebugger = true;
 
         wc.debugger.on('message', (event, method, params) => {
@@ -201,7 +209,12 @@ class SiteAuditor {
           source: WEB_VITALS_INJECTION_SCRIPT
         });
       } catch (dbgErr) {
-        console.warn('Debugger attach warning (will fallback to webContents events):', dbgErr.message);
+        console.warn('Debugger attach warning (will fallback to webRequest events):', dbgErr.message);
+      }
+
+      // If CDP debugger failed to attach, setup webRequest fallback so network requests are always captured
+      if (!this.attachedDebugger) {
+        this.setupWebRequestFallback(wc);
       }
 
       this.emit('audit:status', {
@@ -234,14 +247,36 @@ class SiteAuditor {
         if (!this.isRunning) return;
         const totalLoadTime = Date.now() - this.loadStartTime;
         await this.extractFallbackMetrics();
-        this.overallScore = calculateOverallScore(this.metrics);
 
-        this.emit('audit:status', {
-          status: 'completed',
-          url,
-          totalLoadTime,
-          message: `Carregamento concluído em ${(totalLoadTime / 1000).toFixed(2)}s. Auditoria ativa monitorando requisições assíncronas.`
-        });
+        // Allow 600ms for paints and layout shifts to settle and register
+        setTimeout(async () => {
+          if (!this.isRunning) return;
+          await this.extractFallbackMetrics();
+
+          // Fallback defaults if paints haven't registered on simple text/empty pages
+          if (this.metrics.LCP === null && this.metrics.FCP !== null) {
+            this.updateMetric('LCP', this.metrics.FCP);
+          }
+          if (this.metrics.CLS === null) {
+            this.updateMetric('CLS', 0);
+          }
+
+          this.overallScore = calculateOverallScore(this.metrics);
+
+          this.emit('audit:metric-update', {
+            name: 'SCORE',
+            value: this.overallScore,
+            allMetrics: this.metrics,
+            overallScore: this.overallScore
+          });
+
+          this.emit('audit:status', {
+            status: 'completed',
+            url,
+            totalLoadTime,
+            message: `Carregamento concluído em ${(totalLoadTime / 1000).toFixed(2)}s. Auditoria ativa monitorando requisições assíncronas.`
+          });
+        }, 600);
       });
 
       wc.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
@@ -262,7 +297,11 @@ class SiteAuditor {
       this.isStarting = false;
       if (this.isStoppedByUser) return; // User stopped, not an error
       this.isRunning = false;
-      this.emit('audit:error', { message: `Erro ao auditar página: ${err.message}` });
+      this.emit('audit:status', {
+        status: 'failed',
+        url: this.activeUrl,
+        message: `Erro ao auditar página: ${err.message}`
+      });
     }
   }
 
@@ -283,6 +322,17 @@ class SiteAuditor {
 
       case 'Network.responseReceived': {
         const record = this.networkTracker.onResponseReceived(params);
+        if (record) {
+          this.emit('audit:response-received', {
+            request: record,
+            stats: this.networkTracker.getStats()
+          });
+        }
+        break;
+      }
+
+      case 'Network.dataReceived': {
+        const record = this.networkTracker.onDataReceived(params);
         if (record) {
           this.emit('audit:response-received', {
             request: record,
@@ -331,6 +381,89 @@ class SiteAuditor {
     }
   }
 
+  setupWebRequestFallback(wc) {
+    if (!wc || wc.isDestroyed() || !wc.session || !wc.session.webRequest) return;
+
+    const filter = { urls: ['*://*/*'] };
+
+    wc.session.webRequest.onBeforeRequest(filter, (details, callback) => {
+      if (this.isRunning && details) {
+        const record = this.networkTracker.onRequestWillBeSent({
+          requestId: String(details.id),
+          request: {
+            url: details.url,
+            method: details.method,
+            headers: {}
+          },
+          type: details.resourceType || 'Other',
+          timestamp: details.timestamp / 1000,
+          wallTime: Date.now() / 1000
+        });
+        if (record) {
+          this.emit('audit:request-started', {
+            request: record,
+            stats: this.networkTracker.getStats()
+          });
+        }
+      }
+      callback({ cancel: false });
+    });
+
+    wc.session.webRequest.onResponseStarted(filter, (details) => {
+      if (this.isRunning && details) {
+        const record = this.networkTracker.onResponseReceived({
+          requestId: String(details.id),
+          response: {
+            status: details.statusCode,
+            statusText: details.statusLine || '',
+            headers: details.responseHeaders || {},
+            mimeType: ''
+          },
+          type: details.resourceType || 'Other',
+          timestamp: details.timestamp / 1000
+        });
+        if (record) {
+          this.emit('audit:response-received', {
+            request: record,
+            stats: this.networkTracker.getStats()
+          });
+        }
+      }
+    });
+
+    wc.session.webRequest.onCompleted(filter, (details) => {
+      if (this.isRunning && details) {
+        const record = this.networkTracker.onLoadingFinished({
+          requestId: String(details.id),
+          encodedDataLength: 0,
+          timestamp: details.timestamp / 1000
+        });
+        if (record) {
+          this.emit('audit:request-finished', {
+            request: record,
+            stats: this.networkTracker.getStats()
+          });
+        }
+      }
+    });
+
+    wc.session.webRequest.onErrorOccurred(filter, (details) => {
+      if (this.isRunning && details) {
+        const record = this.networkTracker.onLoadingFailed({
+          requestId: String(details.id),
+          errorText: details.error || 'Erro de rede',
+          timestamp: details.timestamp / 1000
+        });
+        if (record) {
+          this.emit('audit:request-failed', {
+            request: record,
+            stats: this.networkTracker.getStats()
+          });
+        }
+      }
+    });
+  }
+
   updateMetric(name, value) {
     if (!ALLOWED_METRICS.has(name) || typeof value !== 'number' || isNaN(value)) return;
 
@@ -355,15 +488,25 @@ class SiteAuditor {
         (function() {
           try {
             const nav = performance.getEntriesByType('navigation')[0];
-            const paint = performance.getEntriesByType('paint');
+            const paint = performance.getEntriesByType('paint') || [];
             let fcp = 0;
             for (const p of paint) {
               if (p.name === 'first-contentful-paint') fcp = Math.round(p.startTime);
             }
+            let lcp = 0;
+            const lcpEntries = performance.getEntriesByType('largest-contentful-paint') || [];
+            if (lcpEntries.length > 0) {
+              lcp = Math.round(lcpEntries[lcpEntries.length - 1].startTime);
+            }
+            let cls = 0;
+            const shiftEntries = performance.getEntriesByType('layout-shift') || [];
+            for (const entry of shiftEntries) {
+              if (!entry.hadRecentInput) cls += entry.value;
+            }
             const ttfb = nav ? Math.round(nav.responseStart) : 0;
             const domContentLoaded = nav ? Math.round(nav.domContentLoadedEventEnd) : 0;
             const loadEvent = nav ? Math.round(nav.loadEventEnd) : 0;
-            return { fcp, ttfb, domContentLoaded, loadEvent };
+            return { fcp, lcp, cls: parseFloat(cls.toFixed(3)), ttfb, domContentLoaded, loadEvent };
           } catch(e) {
             return null;
           }
@@ -376,6 +519,12 @@ class SiteAuditor {
         }
         if (timing.fcp > 0 && this.metrics.FCP === null) {
           this.updateMetric('FCP', timing.fcp);
+        }
+        if (timing.lcp > 0 && this.metrics.LCP === null) {
+          this.updateMetric('LCP', timing.lcp);
+        }
+        if (typeof timing.cls === 'number' && this.metrics.CLS === null) {
+          this.updateMetric('CLS', timing.cls);
         }
       }
     } catch (e) {
