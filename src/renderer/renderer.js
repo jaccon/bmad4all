@@ -9,7 +9,9 @@
   // State
   let isAuditing = false;
   let currentFilter = 'all';
+  let currentApiOrigin = 'all';
   let currentSearch = '';
+  const detectedApiOrigins = new Map(); // origin -> count
   const requestsMap = new Map(); // id -> { rowEl, req }
   const orderedRowIds = [];
   const MAX_DOM_ROWS = 500; // Cap DOM elements to prevent UI lag
@@ -60,9 +62,11 @@
   const reqCounter = document.getElementById('reqCounter');
   const searchFilter = document.getElementById('searchFilter');
   const filterTabsContainer = document.getElementById('filterTabs');
+  const apiOriginSelect = document.getElementById('apiOriginSelect');
 
   const countEls = {
     all: document.getElementById('countAll'),
+    api: document.getElementById('countApi'),
     fetch: document.getElementById('countFetch'),
     script: document.getElementById('countScript'),
     stylesheet: document.getElementById('countCss'),
@@ -299,6 +303,13 @@
     summaryLoadTime.textContent = '--';
     summaryFailedReqs.textContent = '0';
 
+    detectedApiOrigins.clear();
+    currentApiOrigin = 'all';
+    if (apiOriginSelect) {
+      apiOriginSelect.innerHTML = '<option value="all">Todas as APIs</option>';
+      apiOriginSelect.classList.add('hidden');
+    }
+
     progressBar.style.width = '0%';
     auditStatusBanner.classList.remove('banner-error');
     if (statusDot) statusDot.className = 'status-indicator-dot pulse';
@@ -531,6 +542,8 @@
       row.dataset.category = safeCat;
       row.dataset.url = String(req.url || '').toLowerCase();
       row.dataset.method = safeMethod;
+      row.dataset.isApi = req.isApi ? 'true' : 'false';
+      row.dataset.apiOrigin = req.apiOrigin || '';
 
       row.innerHTML = `
         <td class="cell-status"><span class="status-pill status-pending">...</span></td>
@@ -569,6 +582,12 @@
     const row = entry.rowEl;
     const safeCat = sanitizeClass(req.category);
     row.dataset.category = safeCat;
+    row.dataset.isApi = req.isApi ? 'true' : 'false';
+    row.dataset.apiOrigin = req.apiOrigin || '';
+
+    if (req.isApi && req.apiOrigin) {
+      trackApiOrigin(req.apiOrigin);
+    }
 
     // Status Code
     const statusCell = row.querySelector('.cell-status');
@@ -583,7 +602,11 @@
 
     // Type
     const typeCell = row.querySelector('.cell-type');
-    typeCell.innerHTML = `<span class="type-pill ${safeCat}">${escapeHtml(req.category)}</span>`;
+    if (req.isApi) {
+      typeCell.innerHTML = `<span class="type-pill api" title="Requisição de API">API</span><span class="api-tag">${escapeHtml(req.category)}</span>`;
+    } else {
+      typeCell.innerHTML = `<span class="type-pill ${safeCat}">${escapeHtml(req.category)}</span>`;
+    }
 
     // Size
     const sizeCell = row.querySelector('.cell-size');
@@ -604,6 +627,42 @@
     applyFilterToRow(row);
   }
 
+  function trackApiOrigin(origin) {
+    if (!origin || !apiOriginSelect) return;
+    const prev = detectedApiOrigins.get(origin) || 0;
+    detectedApiOrigins.set(origin, prev + 1);
+    rebuildApiOriginDropdown();
+  }
+
+  function rebuildApiOriginDropdown() {
+    if (!apiOriginSelect) return;
+    if (detectedApiOrigins.size === 0) {
+      apiOriginSelect.classList.add('hidden');
+      return;
+    }
+    apiOriginSelect.classList.remove('hidden');
+
+    const selected = currentApiOrigin;
+    apiOriginSelect.innerHTML = '';
+
+    let totalApi = 0;
+    detectedApiOrigins.forEach(c => { totalApi += c; });
+
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = `⚡ Todas as APIs (${totalApi})`;
+    if (selected === 'all') allOpt.selected = true;
+    apiOriginSelect.appendChild(allOpt);
+
+    for (const [origin, count] of detectedApiOrigins.entries()) {
+      const opt = document.createElement('option');
+      opt.value = origin;
+      opt.textContent = `${origin} (${count})`;
+      if (origin === selected) opt.selected = true;
+      apiOriginSelect.appendChild(opt);
+    }
+  }
+
   function updateStats(stats) {
     if (!stats) return;
 
@@ -614,6 +673,7 @@
 
     if (stats.typeCounts) {
       countEls.all.textContent = stats.typeCounts.all || 0;
+      if (countEls.api) countEls.api.textContent = stats.typeCounts.api || 0;
       countEls.fetch.textContent = stats.typeCounts.fetch || 0;
       countEls.script.textContent = stats.typeCounts.script || 0;
       countEls.stylesheet.textContent = stats.typeCounts.stylesheet || 0;
@@ -631,15 +691,33 @@
     const category = row.dataset.category;
     const url = row.dataset.url || '';
     const method = row.dataset.method || '';
+    const isApi = row.dataset.isApi === 'true';
+    const apiOrigin = row.dataset.apiOrigin || '';
 
-    let matchesFilter = (currentFilter === 'all' || category === currentFilter);
-    let matchesSearch = true;
-
-    if (currentSearch) {
-      matchesSearch = url.includes(currentSearch) || method.includes(currentSearch);
+    let matchesFilter = true;
+    if (currentFilter === 'all') {
+      matchesFilter = true;
+    } else if (currentFilter === 'api') {
+      matchesFilter = isApi;
+    } else {
+      matchesFilter = (category === currentFilter);
     }
 
-    if (matchesFilter && matchesSearch) {
+    let matchesApiOrigin = true;
+    if (currentApiOrigin !== 'all') {
+      matchesApiOrigin = (isApi && apiOrigin === currentApiOrigin);
+    }
+
+    let matchesSearch = true;
+    if (currentSearch) {
+      if (currentSearch === 'api' || currentSearch === 'api:') {
+        matchesSearch = isApi;
+      } else {
+        matchesSearch = url.includes(currentSearch) || method.includes(currentSearch) || apiOrigin.toLowerCase().includes(currentSearch);
+      }
+    }
+
+    if (matchesFilter && matchesApiOrigin && matchesSearch) {
       row.classList.remove('hidden');
     } else {
       row.classList.add('hidden');
@@ -660,6 +738,13 @@
       currentFilter = tab.getAttribute('data-filter');
       applyFiltersAll();
     });
+
+    if (apiOriginSelect) {
+      apiOriginSelect.addEventListener('change', (e) => {
+        currentApiOrigin = e.target.value;
+        applyFiltersAll();
+      });
+    }
 
     searchFilter.addEventListener('input', (e) => {
       currentSearch = (e.target.value || '').toLowerCase().trim();
@@ -719,7 +804,8 @@
       { key: 'Código de Status', val: statusDisplay },
       { key: 'Endereço Remoto', val: req.remoteIPAddress || 'Não informado' },
       { key: 'Protocolo', val: req.protocol || 'Desconhecido' },
-      { key: 'Tipo de Recurso', val: `${(req.category || '').toUpperCase()} (${req.type || ''})` }
+      { key: 'Tipo de Recurso', val: `${(req.category || '').toUpperCase()} (${req.type || ''})` },
+      { key: 'Chamada de API', val: req.isApi ? `Sim (${req.apiOrigin || 'Endpoint REST/GraphQL'})` : 'Não (Recurso Estático)' }
     ];
 
     for (const f of generalFields) {

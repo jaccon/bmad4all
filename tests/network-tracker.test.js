@@ -251,4 +251,63 @@ describe('NetworkTracker', () => {
     assert.equal(item.encodedDataLength, 1024);
     assert.equal(tracker.getStats().totalBytes, 1024);
   });
+
+  test('tracks and separates requests by API', () => {
+    const tracker = new NetworkTracker();
+
+    // 1. Static script
+    tracker.onRequestWillBeSent({
+      requestId: 'req-js',
+      request: { url: 'https://site.com/app.js', method: 'GET' },
+      type: 'Script',
+      timestamp: 1.0
+    });
+
+    // 2. REST API on Stripe
+    tracker.onRequestWillBeSent({
+      requestId: 'req-stripe',
+      request: { url: 'https://api.stripe.com/v1/charges', method: 'POST' },
+      type: 'Fetch',
+      timestamp: 1.1
+    });
+
+    // 3. Internal API on same site
+    tracker.onRequestWillBeSent({
+      requestId: 'req-internal-api',
+      request: { url: 'https://site.com/api/users', method: 'GET' },
+      type: 'XHR',
+      timestamp: 1.2
+    });
+
+    // 4. GraphQL API
+    tracker.onRequestWillBeSent({
+      requestId: 'req-graphql',
+      request: { url: 'https://api.github.com/graphql', method: 'POST' },
+      type: 'Other',
+      timestamp: 1.3
+    });
+
+    const stats = tracker.getStats();
+    assert.equal(stats.totalRequests, 4);
+    assert.equal(stats.typeCounts.api, 3);
+    assert.equal(stats.typeCounts.script, 1);
+
+    // Filter only APIs
+    const apiRequests = tracker.filter({ category: 'api' });
+    assert.equal(apiRequests.length, 3);
+    assert.deepEqual(apiRequests.map(r => r.id), ['req-stripe', 'req-internal-api', 'req-graphql']);
+
+    // Separate requests by specific API Origin
+    const stripeRequests = tracker.filter({ apiOrigin: 'https://api.stripe.com' });
+    assert.equal(stripeRequests.length, 1);
+    assert.equal(stripeRequests[0].id, 'req-stripe');
+
+    const internalApiRequests = tracker.filter({ apiOrigin: 'https://site.com' });
+    assert.equal(internalApiRequests.length, 1);
+    assert.equal(internalApiRequests[0].id, 'req-internal-api');
+
+    const githubRequests = tracker.filter({ apiOrigin: 'https://api.github.com' });
+    assert.equal(githubRequests.length, 1);
+    assert.equal(githubRequests[0].id, 'req-graphql');
+  });
 });

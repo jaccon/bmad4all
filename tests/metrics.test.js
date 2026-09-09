@@ -7,6 +7,8 @@ const {
   classifyResourceType,
   formatBytes,
   formatDuration,
+  isApiRequest,
+  extractApiOrigin,
   THRESHOLDS
 } = require('../src/shared/metrics-calculator.js');
 
@@ -147,6 +149,48 @@ describe('Metrics and Network Utilities', () => {
       assert.equal(formatDuration(1500), '1.50 s');
       assert.equal(formatDuration(null), '0 ms');
       assert.equal(formatDuration(-10), '0 ms');
+    });
+  });
+
+  describe('isApiRequest & extractApiOrigin', () => {
+    test('identifies XHR and Fetch as API requests', () => {
+      assert.equal(isApiRequest('https://site.com/data', 'XHR', '', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/data', 'Fetch', '', 'GET'), true);
+    });
+
+    test('identifies JSON, GraphQL and XML mime types as API requests', () => {
+      assert.equal(isApiRequest('https://site.com/endpoint', 'Other', 'application/json', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/query', 'Other', 'application/graphql+json', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/feed', 'Other', 'text/xml', 'GET'), true);
+    });
+
+    test('identifies REST/API url patterns as API requests', () => {
+      assert.equal(isApiRequest('https://site.com/api/users', 'Other', '', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/v1/auth', 'Other', '', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/v2/orders', 'Other', '', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/graphql', 'Other', '', 'GET'), true);
+      assert.equal(isApiRequest('https://site.com/rest/products', 'Other', '', 'GET'), true);
+    });
+
+    test('identifies POST, PUT, PATCH, DELETE as API requests', () => {
+      assert.equal(isApiRequest('https://site.com/submit', 'Other', '', 'POST'), true);
+      assert.equal(isApiRequest('https://site.com/update', 'Other', '', 'PUT'), true);
+      assert.equal(isApiRequest('https://site.com/change', 'Other', '', 'PATCH'), true);
+      assert.equal(isApiRequest('https://site.com/remove', 'Other', '', 'DELETE'), true);
+    });
+
+    test('does not classify standard static assets as API requests', () => {
+      assert.equal(isApiRequest('https://site.com/app.js', 'Script', 'application/javascript', 'GET'), false);
+      assert.equal(isApiRequest('https://site.com/style.css', 'Stylesheet', 'text/css', 'GET'), false);
+      assert.equal(isApiRequest('https://site.com/logo.png', 'Image', 'image/png', 'GET'), false);
+      assert.equal(isApiRequest('https://site.com/font.woff2', 'Font', 'font/woff2', 'GET'), false);
+      assert.equal(isApiRequest('https://site.com/index.html', 'Document', 'text/html', 'GET'), false);
+    });
+
+    test('extracts API origin cleanly', () => {
+      assert.equal(extractApiOrigin('https://api.stripe.com/v1/charges'), 'https://api.stripe.com');
+      assert.equal(extractApiOrigin('http://localhost:8080/api/test'), 'http://localhost:8080');
+      assert.equal(extractApiOrigin('invalid-url'), '');
     });
   });
 });

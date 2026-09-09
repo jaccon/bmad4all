@@ -221,6 +221,7 @@
         <div class="toolbar-filters">
           <div class="filter-buttons" id="filterTabs">
             <button class="filter-tab active" data-filter="all">Todos <span class="tab-count" id="countAll">0</span></button>
+            <button class="filter-tab" data-filter="api" title="Separar e filtrar requisições de APIs (REST, GraphQL, JSON, Fetch, XHR)">⚡ APIs <span class="tab-count" id="countApi">0</span></button>
             <button class="filter-tab" data-filter="fetch">Fetch / XHR <span class="tab-count" id="countFetch">0</span></button>
             <button class="filter-tab" data-filter="script">JS <span class="tab-count" id="countScript">0</span></button>
             <button class="filter-tab" data-filter="stylesheet">CSS <span class="tab-count" id="countCss">0</span></button>
@@ -229,9 +230,15 @@
             <button class="filter-tab" data-filter="document">Doc <span class="tab-count" id="countDoc">0</span></button>
           </div>
 
+          <div class="api-filter-wrapper">
+            <select id="apiOriginSelect" class="api-origin-select hidden" title="Separar requisições por API / Domínio">
+              <option value="all">Todas as APIs</option>
+            </select>
+          </div>
+
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="searchFilter" class="search-input" placeholder="Filtrar por URL, método...">
+            <input type="text" id="searchFilter" class="search-input" placeholder="Filtrar por URL, método, api...">
           </div>
         </div>
       </div>

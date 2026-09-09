@@ -215,6 +215,66 @@ function formatDuration(ms) {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
+/**
+ * Detects whether a request is an API call (REST, GraphQL, XHR, Fetch, JSON endpoint).
+ */
+function isApiRequest(url = '', resourceType = '', mimeType = '', method = 'GET') {
+  const urlLower = (url || '').toLowerCase();
+  const typeLower = (resourceType || '').toLowerCase();
+  const mimeLower = (mimeType || '').toLowerCase();
+  const methodUpper = (method || 'GET').toUpperCase();
+
+  // 1. Explicit XHR / Fetch resource types
+  if (typeLower === 'xhr' || typeLower === 'fetch') {
+    return true;
+  }
+
+  // 2. JSON, GraphQL, XML or event-stream content types
+  if (
+    mimeLower.includes('json') ||
+    mimeLower.includes('graphql') ||
+    mimeLower.includes('xml') ||
+    mimeLower.includes('text/event-stream')
+  ) {
+    return true;
+  }
+
+  // 3. API URL patterns
+  if (
+    urlLower.includes('/api/') ||
+    urlLower.includes('/api?') ||
+    urlLower.endsWith('/api') ||
+    urlLower.includes('/v1/') ||
+    urlLower.includes('/v2/') ||
+    urlLower.includes('/v3/') ||
+    urlLower.includes('/v4/') ||
+    urlLower.includes('/graphql') ||
+    urlLower.includes('/rest/') ||
+    urlLower.includes('/endpoints/')
+  ) {
+    return true;
+  }
+
+  // 4. Mutation HTTP methods (POST, PUT, PATCH, DELETE) targeting endpoints
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(methodUpper)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Extracts origin/base domain for API grouping.
+ */
+function extractApiOrigin(urlStr = '') {
+  try {
+    const u = new URL(urlStr);
+    return u.origin;
+  } catch (e) {
+    return '';
+  }
+}
+
 module.exports = {
   THRESHOLDS,
   ALLOWED_METRICS,
@@ -223,5 +283,7 @@ module.exports = {
   calculateOverallScore,
   classifyResourceType,
   formatBytes,
-  formatDuration
+  formatDuration,
+  isApiRequest,
+  extractApiOrigin
 };

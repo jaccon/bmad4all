@@ -1,4 +1,4 @@
-const { classifyResourceType } = require('./metrics-calculator.js');
+const { classifyResourceType, isApiRequest, extractApiOrigin } = require('./metrics-calculator.js');
 
 class NetworkTracker {
   constructor(options = {}) {
@@ -14,6 +14,7 @@ class NetworkTracker {
       totalBytes: 0,
       typeCounts: {
         all: 0,
+        api: 0,
         fetch: 0,
         script: 0,
         stylesheet: 0,
@@ -37,6 +38,7 @@ class NetworkTracker {
       totalBytes: 0,
       typeCounts: {
         all: 0,
+        api: 0,
         fetch: 0,
         script: 0,
         stylesheet: 0,
@@ -67,6 +69,8 @@ class NetworkTracker {
 
     const { request, type, timestamp, wallTime } = params;
     const category = classifyResourceType(type, '');
+    const isApi = isApiRequest(request.url, type, '', request.method);
+    const apiOrigin = extractApiOrigin(request.url);
 
     const record = {
       id,
@@ -75,6 +79,8 @@ class NetworkTracker {
       method: (request.method || 'GET').toUpperCase(),
       type: type || 'Other',
       category,
+      isApi,
+      apiOrigin,
       statusCode: null,
       statusText: '',
       mimeType: '',
@@ -96,8 +102,13 @@ class NetworkTracker {
       if (this.orderedIds.length >= this.maxItems) {
         const oldestId = this.orderedIds.shift();
         const oldItem = this.requests.get(oldestId);
-        if (oldItem && this.stats.typeCounts[oldItem.category] > 0) {
-          this.stats.typeCounts[oldItem.category]--;
+        if (oldItem) {
+          if (this.stats.typeCounts[oldItem.category] > 0) {
+            this.stats.typeCounts[oldItem.category]--;
+          }
+          if (oldItem.isApi && this.stats.typeCounts.api > 0) {
+            this.stats.typeCounts.api--;
+          }
           this.stats.typeCounts.all--;
         }
         this.requests.delete(oldestId);
@@ -105,6 +116,9 @@ class NetworkTracker {
       this.orderedIds.push(id);
       this.stats.totalRequests++;
       this.stats.typeCounts.all++;
+      if (isApi) {
+        this.stats.typeCounts.api++;
+      }
       if (this.stats.typeCounts[category] !== undefined) {
         this.stats.typeCounts[category]++;
       } else {
@@ -153,6 +167,12 @@ class NetworkTracker {
       } else {
         this.stats.typeCounts.other++;
       }
+    }
+
+    // Re-evaluate API classification with mimeType
+    if (!record.isApi && isApiRequest(record.url, type || record.type, response.mimeType, record.method)) {
+      record.isApi = true;
+      this.stats.typeCounts.api++;
     }
 
     if (timestamp && record.startMonotonic > 0) {
@@ -236,14 +256,22 @@ class NetworkTracker {
     return { ...this.stats };
   }
 
-  filter({ category = 'all', search = '', status = 'all' } = {}) {
+  filter({ category = 'all', search = '', status = 'all', onlyApi = false, apiOrigin = '' } = {}) {
     const s = (search || '').toLowerCase().trim();
     const cat = (category || 'all').toLowerCase();
     const stat = (status || 'all').toLowerCase();
 
     return this.getRequests().filter(req => {
       if (!req) return false;
-      if (cat !== 'all' && req.category !== cat) return false;
+      if (onlyApi && !req.isApi) return false;
+      if (apiOrigin && (!req.isApi || req.apiOrigin !== apiOrigin)) return false;
+      if (cat !== 'all') {
+        if (cat === 'api') {
+          if (!req.isApi) return false;
+        } else if (req.category !== cat) {
+          return false;
+        }
+      }
       if (stat !== 'all' && req.status !== stat) return false;
       if (s) {
         const reqUrl = (req.url || '').toLowerCase();
