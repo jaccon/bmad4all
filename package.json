@@ -8,6 +8,7 @@
     "test": "node --test tests/",
     "check": "node --check src/main/main.js src/main/auditor.js src/preload/preload.js src/renderer/renderer.js",
     "build:mac": "electron-builder --mac --publish never",
+    "build:clean": "rm -rf dist && electron-builder --mac --publish never",
     "build:mac:dir": "electron-builder --mac --dir --publish never",
     "pack": "electron-builder --dir"
   },
@@ -26,8 +27,20 @@
       "identity": null,
       "icon": "build/icon.icns",
       "target": [
-        "dmg",
-        "zip"
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     }
   },
