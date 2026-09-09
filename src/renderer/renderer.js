@@ -318,8 +318,14 @@
 
   function setAuditingState(active, isError = false) {
     isAuditing = active;
+    const auditBtnIcon = document.getElementById('auditBtnIcon');
+    const auditBtnText = document.getElementById('auditBtnText');
+
     if (active) {
-      btnAudit.classList.add('hidden');
+      if (auditBtnIcon) auditBtnIcon.textContent = '⏳';
+      if (auditBtnText) auditBtnText.textContent = 'Analisando...';
+      btnAudit.classList.remove('hidden');
+      btnAudit.classList.add('btn-auditing');
       btnStop.classList.remove('hidden');
       auditStatusBanner.classList.remove('hidden', 'banner-error');
       if (statusDot) statusDot.className = 'status-indicator-dot pulse';
@@ -327,7 +333,9 @@
       auditStateLabel.textContent = 'Analisando...';
       auditStateLabel.style.color = 'var(--color-accent)';
     } else {
-      btnAudit.classList.remove('hidden');
+      if (auditBtnIcon) auditBtnIcon.textContent = '🚀';
+      if (auditBtnText) auditBtnText.textContent = 'Analisar Site';
+      btnAudit.classList.remove('hidden', 'btn-auditing');
       btnStop.classList.add('hidden');
       if (isError) {
         auditStateLabel.textContent = 'Erro no Carregamento';
@@ -345,7 +353,6 @@
       urlInput.focus();
       return;
     }
-    if (isAuditing) return;
 
     const trimmed = url.trim();
     // Validate protocol scheme if provided
@@ -356,6 +363,16 @@
         showToast(`Protocolo "${proto}:" não permitido. Utilize http:// ou https://`, 'error');
         urlInput.focus();
         return;
+      }
+    }
+
+    if (isAuditing) {
+      if (window.electronAPI) {
+        try {
+          await window.electronAPI.stopAudit();
+        } catch (e) {
+          console.warn('Erro ao interromper auditoria anterior:', e);
+        }
       }
     }
 
@@ -770,7 +787,7 @@
     renderDrawerDetails(req);
 
     if (requestDrawer) requestDrawer.classList.remove('hidden');
-    if (drawerBackdrop) drawerBackdrop.classList.remove('hidden');
+    if (drawerBackdrop) drawerBackdrop.classList.add('hidden');
   }
 
   function closeDrawer() {

@@ -269,12 +269,17 @@ button,
   display: flex;
   flex-direction: column;
   gap: 10px;
+  position: relative;
+  z-index: 50;
 }
 
 .url-form {
   display: flex;
   gap: 12px;
   align-items: center;
+  position: relative;
+  z-index: 51;
+  -webkit-app-region: no-drag !important;
 }
 
 .url-input-wrapper {
@@ -287,6 +292,10 @@ button,
   padding: 4px 14px;
   transition: all 0.2s ease;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+  position: relative;
+  z-index: 52;
+  cursor: text;
+  -webkit-app-region: no-drag !important;
 }
 
 .url-input-wrapper:focus-within {
@@ -312,7 +321,10 @@ button,
   user-select: text !important;
   -webkit-user-select: text !important;
   -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
   cursor: text !important;
+  position: relative;
+  z-index: 53;
 }
 
 .url-input::placeholder {
@@ -1263,14 +1275,14 @@ button,
 }
 
 .drawer-backdrop {
-  position: fixed;
-  top: 28px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-  z-index: 1050;
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.btn-auditing {
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%) !important;
+  opacity: 0.95;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
 }
 
 .drawer-header {
