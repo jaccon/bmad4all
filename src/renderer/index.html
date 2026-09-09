@@ -62,6 +62,19 @@
           <button type="button" class="btn-clear" id="btnClearUrl" title="Limpar URL">✕</button>
         </div>
 
+        <!-- Traffic Shaping / Throttling Selector -->
+        <div class="throttling-wrapper" title="Emulação de Rede / Traffic Shaping via Chrome DevTools Protocol">
+          <span class="throttling-icon">📶</span>
+          <select id="selectThrottling" class="throttling-select" title="Simular condições de rede (Traffic Shaping)">
+            <option value="none">Banda Real (Sem Limitação)</option>
+            <option value="fast-4g">Fast 4G / LTE (25M / 20ms)</option>
+            <option value="slow-4g">Slow 4G (4M / 100ms)</option>
+            <option value="fast-3g">Fast 3G (1.6M / 150ms)</option>
+            <option value="slow-3g">Slow 3G (400K / 400ms)</option>
+            <option value="broadband-50">Cabo / Wi-Fi (50M / 10ms)</option>
+          </select>
+        </div>
+
         <button type="submit" class="btn btn-primary" id="btnAudit">
           <span class="btn-icon" id="auditBtnIcon">🚀</span>
           <span id="auditBtnText">Analisar Site</span>
@@ -188,6 +201,22 @@
           </div>
         </div>
 
+        <!-- Tester Bandwidth Probe Card -->
+        <div class="vital-card client-speed-card" id="cardClientSpeed">
+          <div class="card-top">
+            <span class="metric-abbr">BANDA LOCAL</span>
+            <button type="button" class="btn-probe-speed" id="btnProbeSpeed" title="Medir velocidade da sua conexão agora">⚡ Medir</button>
+          </div>
+          <div class="metric-value-wrapper">
+            <span class="metric-value" id="valClientSpeed">--</span>
+            <span class="metric-unit">Mbps</span>
+          </div>
+          <div class="card-bottom">
+            <span class="metric-name" id="labelClientPing">Latência: -- ms</span>
+            <span class="metric-guide" id="labelClientDiag">Conexão do Testador</span>
+          </div>
+        </div>
+
         <!-- Summary Stats Card -->
         <div class="vital-card stats-summary-card">
           <div class="summary-row">
@@ -199,8 +228,12 @@
             <span class="summary-val" id="summaryTotalBytes">0 B</span>
           </div>
           <div class="summary-row">
-            <span class="summary-label">Tempo Total:</span>
+            <span class="summary-label">Tempo de Carga:</span>
             <span class="summary-val" id="summaryLoadTime">--</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Throughput Site:</span>
+            <span class="summary-val text-accent" id="summaryEffectiveThroughput">-- Mbps</span>
           </div>
           <div class="summary-row">
             <span class="summary-label">Falhas / Erros:</span>
@@ -230,15 +263,34 @@
             <button class="filter-tab" data-filter="document">Doc <span class="tab-count" id="countDoc">0</span></button>
           </div>
 
-          <div class="status-filter-wrapper">
+          <div class="status-filter-wrapper" title="Filtrar requisições por Código de Status HTTP">
+            <span class="status-filter-label">HTTP:</span>
             <select id="statusFilterSelect" class="status-filter-select" title="Filtrar por Código de Status HTTP">
               <option value="all">Status: Todos</option>
-              <option value="2xx">🟢 2xx Sucesso</option>
-              <option value="3xx">🔵 3xx Redirect</option>
-              <option value="4xx">🟠 4xx Erro Cliente</option>
-              <option value="5xx">🔴 5xx Erro Servidor</option>
-              <option value="error">⚠️ Erros & Falhas</option>
-              <option value="pending">⏳ Pendente</option>
+              <optgroup label="Faixas de Status">
+                <option value="2xx">🟢 2xx Sucesso</option>
+                <option value="3xx">🔵 3xx Redirecionamento</option>
+                <option value="4xx">🟠 4xx Erro do Cliente</option>
+                <option value="5xx">🔴 5xx Erro do Servidor</option>
+                <option value="error">⚠️ Falhas / Erros de Rede</option>
+                <option value="pending">⏳ Pendentes</option>
+              </optgroup>
+              <optgroup label="Códigos Específicos">
+                <option value="200">200 OK</option>
+                <option value="201">201 Created</option>
+                <option value="204">204 No Content</option>
+                <option value="301">301 Moved Permanently</option>
+                <option value="302">302 Found</option>
+                <option value="304">304 Not Modified</option>
+                <option value="400">400 Bad Request</option>
+                <option value="401">401 Unauthorized</option>
+                <option value="403">403 Forbidden</option>
+                <option value="404">404 Not Found</option>
+                <option value="429">429 Too Many Requests</option>
+                <option value="500">500 Internal Server Error</option>
+                <option value="502">502 Bad Gateway</option>
+                <option value="503">503 Service Unavailable</option>
+              </optgroup>
             </select>
           </div>
 

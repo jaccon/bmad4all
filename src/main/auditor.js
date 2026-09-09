@@ -1,6 +1,7 @@
 const { BrowserWindow } = require('electron');
 const { NetworkTracker } = require('../shared/network-tracker.js');
 const { normalizeUrl, evaluateMetric, calculateOverallScore, ALLOWED_METRICS } = require('../shared/metrics-calculator.js');
+const { THROTTLING_PROFILES } = require('../shared/speed-tester.js');
 
 // Injected Web Vitals collection script
 const WEB_VITALS_INJECTION_SCRIPT = `
@@ -95,6 +96,7 @@ class SiteAuditor {
     this.isStarting = false;
     this.isStoppedByUser = false;
     this.attachedDebugger = false;
+    this.currentThrottling = 'none';
     this.loadStartTime = 0;
     this.auditTimeoutTimer = null;
   }
@@ -105,9 +107,10 @@ class SiteAuditor {
     }
   }
 
-  async startAudit(rawUrl) {
+  async startAudit(rawUrl, throttlingProfile = 'none') {
     if (this.isStarting) return;
     this.isStarting = true;
+    this.currentThrottling = throttlingProfile || 'none';
 
     if (this.isRunning) {
       await this.stopAudit();
@@ -203,6 +206,25 @@ class SiteAuditor {
         await wc.debugger.sendCommand('Network.enable');
         await wc.debugger.sendCommand('Page.enable');
         await wc.debugger.sendCommand('Runtime.enable');
+
+        // Emulate network traffic shaping / throttling profile
+        const profile = THROTTLING_PROFILES[this.currentThrottling] || THROTTLING_PROFILES.none;
+        if (profile && profile.id !== 'none') {
+          await wc.debugger.sendCommand('Network.emulateNetworkConditions', {
+            offline: false,
+            latency: profile.latency,
+            downloadThroughput: profile.downloadThroughput,
+            uploadThroughput: profile.uploadThroughput,
+            connectionType: profile.connectionType
+          });
+        } else {
+          await wc.debugger.sendCommand('Network.emulateNetworkConditions', {
+            offline: false,
+            latency: 0,
+            downloadThroughput: -1,
+            uploadThroughput: -1
+          });
+        }
 
         // Inject Web Vitals observer before scripts execute
         await wc.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {

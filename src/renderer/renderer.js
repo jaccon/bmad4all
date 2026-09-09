@@ -12,6 +12,10 @@
   let currentApiOrigin = 'all';
   let currentHttpStatus = 'all';
   let currentSearch = '';
+  let clientSpeedMbps = 0;
+  let clientPingMs = 0;
+  let lastTotalBytes = 0;
+  let lastLoadTimeMs = 0;
   const detectedApiOrigins = new Map(); // origin -> count
   const detectedStatusCodes = new Set(); // set of unique status codes observed
   const requestsMap = new Map(); // id -> { rowEl, req }
@@ -30,6 +34,7 @@
 
   const auditForm = document.getElementById('auditForm');
   const urlInput = document.getElementById('urlInput');
+  const selectThrottling = document.getElementById('selectThrottling');
   const btnClearUrl = document.getElementById('btnClearUrl');
   const btnAudit = document.getElementById('btnAudit');
   const btnStop = document.getElementById('btnStop');
@@ -53,9 +58,16 @@
   const valTTFBEl = document.getElementById('valTTFB');
   const badgeTTFBEl = document.getElementById('badgeTTFB');
 
+  // Client Speed & Stats Summary
+  const valClientSpeed = document.getElementById('valClientSpeed');
+  const labelClientPing = document.getElementById('labelClientPing');
+  const labelClientDiag = document.getElementById('labelClientDiag');
+  const btnProbeSpeed = document.getElementById('btnProbeSpeed');
+
   const summaryTotalReqs = document.getElementById('summaryTotalReqs');
   const summaryTotalBytes = document.getElementById('summaryTotalBytes');
   const summaryLoadTime = document.getElementById('summaryLoadTime');
+  const summaryEffectiveThroughput = document.getElementById('summaryEffectiveThroughput');
   const summaryFailedReqs = document.getElementById('summaryFailedReqs');
 
   // Network Table & Filters
@@ -321,6 +333,10 @@
       if (optGroup) optGroup.remove();
     }
 
+    lastTotalBytes = 0;
+    lastLoadTimeMs = 0;
+    if (summaryEffectiveThroughput) summaryEffectiveThroughput.textContent = '-- Mbps';
+
     progressBar.style.width = '0%';
     auditStatusBanner.classList.remove('banner-error');
     if (statusDot) statusDot.className = 'status-indicator-dot pulse';
@@ -391,9 +407,11 @@
     resetDashboard();
     setAuditingState(true);
 
+    const throttling = selectThrottling ? selectThrottling.value : 'none';
+
     if (window.electronAPI) {
       try {
-        await window.electronAPI.startAudit(trimmed);
+        await window.electronAPI.startAudit(trimmed, throttling);
       } catch (err) {
         setAuditingState(false, true);
         const errMsg = err.message || String(err);
@@ -741,6 +759,64 @@
     }
   }
 
+  function updateThroughputComparison() {
+    if (!summaryEffectiveThroughput) return;
+    if (lastTotalBytes > 0 && lastLoadTimeMs > 0) {
+      const loadTimeSec = lastLoadTimeMs / 1000;
+      const effectiveMbps = ((lastTotalBytes * 8) / (loadTimeSec * 1000000));
+      const displayMbps = effectiveMbps.toFixed(2);
+      summaryEffectiveThroughput.textContent = `${displayMbps} Mbps`;
+
+      if (clientSpeedMbps > 0) {
+        const pct = Math.min(100, Math.round((effectiveMbps / clientSpeedMbps) * 100));
+        summaryEffectiveThroughput.title = `Site utilizou ~${pct}% da sua banda local medida (${clientSpeedMbps.toFixed(1)} Mbps)`;
+      }
+    } else {
+      summaryEffectiveThroughput.textContent = '-- Mbps';
+    }
+  }
+
+  async function runClientSpeedProbe() {
+    if (!window.electronAPI || !window.electronAPI.probeSpeed) return;
+    if (btnProbeSpeed) {
+      btnProbeSpeed.disabled = true;
+      btnProbeSpeed.textContent = '⏳ Medindo...';
+    }
+    if (labelClientDiag) labelClientDiag.textContent = 'Testando banda...';
+
+    try {
+      const res = await window.electronAPI.probeSpeed();
+      if (res && res.ok) {
+        clientSpeedMbps = res.downloadMbps;
+        clientPingMs = res.pingMs;
+
+        if (valClientSpeed) valClientSpeed.textContent = res.downloadMbps.toFixed(1);
+        if (labelClientPing) labelClientPing.textContent = `Ping: ${res.pingMs} ms`;
+        if (labelClientDiag) {
+          if (res.downloadMbps > 50) {
+            labelClientDiag.textContent = '🟢 Conexão Rápida';
+          } else if (res.downloadMbps > 15) {
+            labelClientDiag.textContent = '🟡 Conexão Normal';
+          } else {
+            labelClientDiag.textContent = '🔴 Conexão Lenta';
+          }
+        }
+        showToast(`Banda local medida: ${res.downloadMbps} Mbps (Ping: ${res.pingMs} ms)`, 'success', 3000);
+        updateThroughputComparison();
+      } else {
+        if (labelClientDiag) labelClientDiag.textContent = 'Falha ao medir';
+        showToast('Não foi possível verificar a velocidade local.', 'warning', 3000);
+      }
+    } catch (e) {
+      if (labelClientDiag) labelClientDiag.textContent = 'Erro de teste';
+    } finally {
+      if (btnProbeSpeed) {
+        btnProbeSpeed.disabled = false;
+        btnProbeSpeed.textContent = '⚡ Medir';
+      }
+    }
+  }
+
   function updateStats(stats) {
     if (!stats) return;
 
@@ -748,6 +824,11 @@
     summaryTotalBytes.textContent = formatBytes(stats.totalBytes || 0);
     summaryFailedReqs.textContent = stats.failedRequests || 0;
     reqCounter.textContent = `${stats.totalRequests || 0} requisições capturadas`;
+
+    if (typeof stats.totalBytes === 'number' && stats.totalBytes > 0) {
+      lastTotalBytes = stats.totalBytes;
+      updateThroughputComparison();
+    }
 
     if (stats.typeCounts) {
       countEls.all.textContent = stats.typeCounts.all || 0;
@@ -1075,6 +1156,8 @@
         setAuditingState(false);
         if (data.totalLoadTime) {
           summaryLoadTime.textContent = (data.totalLoadTime / 1000).toFixed(2) + ' s';
+          lastLoadTimeMs = data.totalLoadTime;
+          updateThroughputComparison();
         }
       } else if (data.status === 'failed' || data.status === 'stopped') {
         const isFail = data.status === 'failed';
@@ -1193,6 +1276,12 @@
     setupFilters();
     setupDrawerEvents();
     setupIpcListeners();
+
+    if (btnProbeSpeed) {
+      btnProbeSpeed.addEventListener('click', runClientSpeedProbe);
+    }
+    // Auto probe client speed shortly after start
+    setTimeout(runClientSpeedProbe, 1200);
   }
 
   if (document.readyState === 'loading') {

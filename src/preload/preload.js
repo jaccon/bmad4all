@@ -1,8 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  startAudit: (url) => ipcRenderer.invoke('audit:start', url),
+  startAudit: (urlOrPayload, throttling) => {
+    if (typeof urlOrPayload === 'string') {
+      return ipcRenderer.invoke('audit:start', { url: urlOrPayload, throttling: throttling || 'none' });
+    }
+    return ipcRenderer.invoke('audit:start', urlOrPayload);
+  },
   stopAudit: () => ipcRenderer.invoke('audit:stop'),
+  probeSpeed: () => ipcRenderer.invoke('network:probe-speed'),
   getSystemInfo: () => ipcRenderer.invoke('app:get-system-info'),
 
   onRequestStarted: (callback) => {

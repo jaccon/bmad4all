@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { SiteAuditor } = require('./auditor.js');
+const { probeClientSpeed } = require('../shared/speed-tester.js');
 
 let mainWindow = null;
 let auditor = null;
@@ -36,12 +37,14 @@ function createMainWindow() {
 }
 
 // IPC Handlers
-ipcMain.handle('audit:start', async (event, url) => {
+ipcMain.handle('audit:start', async (event, payload) => {
   if (!auditor && mainWindow) {
     auditor = new SiteAuditor(mainWindow);
   }
   if (auditor) {
-    await auditor.startAudit(url);
+    const url = (typeof payload === 'string') ? payload : (payload && payload.url);
+    const throttling = (typeof payload === 'object' && payload && payload.throttling) ? payload.throttling : 'none';
+    await auditor.startAudit(url, throttling);
     return { ok: true };
   }
   return { ok: false, error: 'Auditor não inicializado' };
@@ -53,6 +56,10 @@ ipcMain.handle('audit:stop', async () => {
     return { ok: true };
   }
   return { ok: false };
+});
+
+ipcMain.handle('network:probe-speed', async () => {
+  return await probeClientSpeed();
 });
 
 ipcMain.handle('app:get-system-info', () => {
