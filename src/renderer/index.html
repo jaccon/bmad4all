@@ -39,8 +39,8 @@
     </div>
   </header>
 
-  <!-- Main Content Container -->
-  <main class="app-main">
+  <!-- Main Content Container: URL Inspector View -->
+  <main class="app-main" id="inspectorView">
     <!-- URL Input & Audit Control Bar -->
     <section class="url-control-section">
       <form id="auditForm" class="url-form">
@@ -375,68 +375,73 @@
     </section>
   </main>
 
-  <!-- Audit History Modal (SQLite) -->
-  <div class="modal-backdrop hidden" id="historyModal" role="dialog" aria-label="Audit Execution History">
-    <div class="modal-card history-modal-card">
-      <div class="modal-header">
-        <div class="modal-header-title">
-          <h3>Audit History</h3>
-          <span class="modal-subtitle">Comprehensive record of past website performance runs stored in SQLite</span>
-        </div>
-        <div class="modal-header-actions">
-          <button type="button" class="btn btn-secondary btn-sm" id="btnClearHistory" title="Clear all recorded history">Clear History</button>
-          <button type="button" class="btn-close-modal" id="btnCloseHistoryModal" title="Close (Esc)">✕</button>
+  <!-- Full-Screen Audit History View (SQLite) -->
+  <main class="app-main history-fullscreen-view hidden" id="historyView" role="region" aria-label="Audit Execution History">
+    <div class="history-view-header">
+      <div class="history-view-title-group">
+        <button type="button" class="btn btn-secondary btn-back" id="btnBackToInspector" title="Return to URL Inspector (Esc)">
+          <span class="back-arrow">←</span>
+          <span>Back to Inspector</span>
+        </button>
+        <div class="history-title-desc">
+          <h2>Audit Execution History</h2>
+          <span class="history-subtitle">Comprehensive record of past website performance runs stored in local SQLite</span>
         </div>
       </div>
-      <div class="history-content-container">
-        <div class="history-summary-bar" id="historySummaryBar">
-          <div class="history-stat-item">
-            <span class="history-stat-label">Total Audits:</span>
-            <strong class="history-stat-val" id="statHistoryTotal">0</strong>
-          </div>
-          <div class="history-stat-item">
-            <span class="history-stat-label">Average Score:</span>
-            <strong class="history-stat-val" id="statHistoryAvgScore">--</strong>
-          </div>
-          <div class="history-stat-item">
-            <span class="history-stat-label">Average Load Time:</span>
-            <strong class="history-stat-val" id="statHistoryAvgTime">--</strong>
-          </div>
-          <div class="history-stat-item">
-            <span class="history-stat-label">Database Engine:</span>
-            <span class="sqlite-badge">SQLite Local</span>
-          </div>
-        </div>
+      <div class="history-header-actions">
+        <button type="button" class="btn btn-secondary btn-sm" id="btnClearHistory" title="Clear all recorded history">Clear History</button>
+      </div>
+    </div>
 
-        <div class="history-table-wrapper">
-          <table class="history-table" id="historyTable">
-            <thead>
-              <tr>
-                <th style="width: 130px;">Date / Time</th>
-                <th>Target URL</th>
-                <th style="width: 70px;">Score</th>
-                <th style="width: 230px;">Web Vitals (LCP / FCP / CLS / TTFB)</th>
-                <th style="width: 85px;">Load Time</th>
-                <th style="width: 70px;">Requests</th>
-                <th style="width: 80px;">Size</th>
-                <th style="width: 90px;">Profile</th>
-                <th style="width: 95px;">Tester Speed</th>
-                <th style="width: 85px;">Status</th>
-                <th style="width: 110px; text-align: right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="historyTableBody">
-              <!-- Populated dynamically -->
-            </tbody>
-          </table>
-          <div class="history-empty-state hidden" id="historyEmptyState">
-            <p class="empty-title">No audit history recorded yet</p>
-            <span class="empty-subtext">Run a performance audit to have metrics automatically saved to your local SQLite database.</span>
-          </div>
+    <div class="history-content-container">
+      <div class="history-summary-bar" id="historySummaryBar">
+        <div class="history-stat-item">
+          <span class="history-stat-label">Total Audits:</span>
+          <strong class="history-stat-val" id="statHistoryTotal">0</strong>
+        </div>
+        <div class="history-stat-item">
+          <span class="history-stat-label">Average Score:</span>
+          <strong class="history-stat-val" id="statHistoryAvgScore">--</strong>
+        </div>
+        <div class="history-stat-item">
+          <span class="history-stat-label">Average Load Time:</span>
+          <strong class="history-stat-val" id="statHistoryAvgTime">--</strong>
+        </div>
+        <div class="history-stat-item">
+          <span class="history-stat-label">Database Engine:</span>
+          <span class="sqlite-badge">SQLite Local</span>
+        </div>
+      </div>
+
+      <div class="history-table-wrapper">
+        <table class="history-table" id="historyTable">
+          <thead>
+            <tr>
+              <th style="width: 140px;">Date / Time</th>
+              <th>Target URL</th>
+              <th style="width: 75px;">Score</th>
+              <th style="width: 250px;">Web Vitals (LCP / FCP / CLS / TTFB)</th>
+              <th style="width: 90px;">Load Time</th>
+              <th style="width: 80px;">Requests</th>
+              <th style="width: 85px;">Size</th>
+              <th style="width: 110px;">Profile</th>
+              <th style="width: 105px;">Tester Speed</th>
+              <th style="width: 95px;">Status</th>
+              <th style="width: 130px; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="historyTableBody">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+        <div class="history-empty-state hidden" id="historyEmptyState">
+          <p class="empty-title">No audit history recorded yet</p>
+          <span class="empty-subtext">Run a performance audit to have metrics automatically saved to your local SQLite database.</span>
+          <button type="button" class="btn btn-primary btn-sm" id="btnEmptyRunAudit" style="margin-top: 14px;">Run First Inspection</button>
         </div>
       </div>
     </div>
-  </div>
+  </main>
 
   <!-- Request Details Inspection Drawer -->
   <aside class="request-drawer hidden" id="requestDrawer" aria-label="Request Details">

@@ -117,10 +117,14 @@
   const btnRetry = document.getElementById('btnRetry');
   let lastAuditedUrl = '';
 
-  // History Elements (SQLite)
+  // View Containers & History Elements (Full-Screen SQLite)
+  const inspectorView = document.getElementById('inspectorView');
+  const historyView = document.getElementById('historyView');
+  const historyModal = historyView; // alias for backwards compatibility
+  const btnBackToInspector = document.getElementById('btnBackToInspector');
+  const btnEmptyRunAudit = document.getElementById('btnEmptyRunAudit');
   const btnOpenHistory = document.getElementById('btnOpenHistory');
   const historyCountBadge = document.getElementById('historyCountBadge');
-  const historyModal = document.getElementById('historyModal');
   const btnCloseHistoryModal = document.getElementById('btnCloseHistoryModal');
   const btnClearHistory = document.getElementById('btnClearHistory');
   const historyTableBody = document.getElementById('historyTableBody');
@@ -387,7 +391,7 @@
       btnRun.title = `Rerun audit for ${item.url}`;
       btnRun.addEventListener('click', (e) => {
         e.stopPropagation();
-        closeHistoryModal();
+        showInspectorView();
         if (urlInput) urlInput.value = item.url;
         if (selectThrottling && item.throttling) {
           selectThrottling.value = item.throttling;
@@ -435,15 +439,34 @@
     }
   }
 
-  function openHistoryModal() {
-    if (!historyModal) return;
-    historyModal.classList.remove('hidden');
+  function showHistoryView() {
+    if (inspectorView) inspectorView.classList.add('hidden');
+    if (historyView) historyView.classList.remove('hidden');
+    if (btnOpenHistory) btnOpenHistory.classList.add('active');
     loadAuditHistory();
   }
 
+  function showInspectorView() {
+    if (historyView) historyView.classList.add('hidden');
+    if (inspectorView) inspectorView.classList.remove('hidden');
+    if (btnOpenHistory) btnOpenHistory.classList.remove('active');
+  }
+
+  function toggleHistoryView() {
+    if (historyView && !historyView.classList.contains('hidden')) {
+      showInspectorView();
+    } else {
+      showHistoryView();
+    }
+  }
+
+  // Backwards-compatible aliases
+  function openHistoryModal() {
+    showHistoryView();
+  }
+
   function closeHistoryModal() {
-    if (!historyModal) return;
-    historyModal.classList.add('hidden');
+    showInspectorView();
   }
 
   async function saveCurrentAuditToHistory(status = 'completed', errorMsg = null) {
@@ -479,10 +502,16 @@
 
   function setupHistoryEvents() {
     if (btnOpenHistory) {
-      btnOpenHistory.addEventListener('click', openHistoryModal);
+      btnOpenHistory.addEventListener('click', toggleHistoryView);
+    }
+    if (btnBackToInspector) {
+      btnBackToInspector.addEventListener('click', showInspectorView);
     }
     if (btnCloseHistoryModal) {
-      btnCloseHistoryModal.addEventListener('click', closeHistoryModal);
+      btnCloseHistoryModal.addEventListener('click', showInspectorView);
+    }
+    if (btnEmptyRunAudit) {
+      btnEmptyRunAudit.addEventListener('click', showInspectorView);
     }
     if (btnClearHistory) {
       btnClearHistory.addEventListener('click', async () => {
@@ -495,18 +524,10 @@
       });
     }
 
-    if (historyModal) {
-      historyModal.addEventListener('click', (e) => {
-        if (e.target === historyModal) {
-          closeHistoryModal();
-        }
-      });
-    }
-
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        if (historyModal && !historyModal.classList.contains('hidden')) {
-          closeHistoryModal();
+        if (historyView && !historyView.classList.contains('hidden')) {
+          showInspectorView();
         }
       }
     });
