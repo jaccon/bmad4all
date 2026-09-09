@@ -2064,6 +2064,15 @@
     // Initial load of audit history
     loadAuditHistory();
 
+    // Safely route external links to default system browser
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href^="http"]');
+      if (link && window.electronAPI && window.electronAPI.openExternal) {
+        e.preventDefault();
+        window.electronAPI.openExternal(link.href);
+      }
+    });
+
     // Fetch system environment info
     if (window.electronAPI && window.electronAPI.getSystemInfo) {
       window.electronAPI.getSystemInfo().then(info => {

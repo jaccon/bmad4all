@@ -121,6 +121,13 @@ button,
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8), 0 0 14px rgba(56, 189, 248, 0.4);
 }
 
+.brand-text {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .brand-text h1 {
   font-size: 17px;
   font-weight: 700;
@@ -137,7 +144,28 @@ button,
   color: var(--text-muted);
   font-weight: 500;
   font-family: var(--font-mono);
-  margin-left: 6px;
+}
+
+.badge-github-link {
+  color: #94a3b8;
+  text-decoration: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.badge-github-link:hover {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  text-decoration: none;
 }
 
 /* Live Clock */

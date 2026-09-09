@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopAudit: () => ipcRenderer.invoke('audit:stop'),
   probeSpeed: () => ipcRenderer.invoke('network:probe-speed'),
   getSystemInfo: () => ipcRenderer.invoke('app:get-system-info'),
+  openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
 
   // SQLite History API
   getHistory: (limit) => ipcRenderer.invoke('history:get-all', limit),

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { SiteAuditor } = require('./auditor.js');
@@ -49,6 +49,14 @@ function createMainWindow() {
   });
 
   auditor = new SiteAuditor(mainWindow);
+
+  // Safely open external links in user default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
 
   mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
@@ -166,6 +174,18 @@ ipcMain.handle('app:get-system-info', () => {
     nodeVersion: process.versions.node,
     platform: process.platform
   };
+});
+
+ipcMain.handle('app:open-external', async (event, url) => {
+  if (typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+    try {
+      await shell.openExternal(url);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+  return { ok: false, error: 'Invalid external URL' };
 });
 
 app.whenReady().then(async () => {
