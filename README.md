@@ -13,6 +13,10 @@ Created and maintained by **[André Jaccon](https://github.com/jaccon)**.
 
 ---
 
+![URL Inspector Interface](screenshot.jpg)
+
+---
+
 ## Table of Contents
 
 - [About The Project](#about-the-project)
