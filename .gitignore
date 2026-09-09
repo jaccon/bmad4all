@@ -4,5 +4,6 @@ build/*
 !build/icon.icns
 !build/icon.png
 !build/icon.ico
+!build/linkedin_banner.jpg
 .DS_Store
 *.log
