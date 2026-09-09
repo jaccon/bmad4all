@@ -53,7 +53,7 @@
     "lcp",
     "dark-mode"
   ],
-  "author": "Antigravity & Jaccon",
+  "author": "André Jaccon",
   "license": "MIT",
   "devDependencies": {
     "electron": "^30.0.0",
