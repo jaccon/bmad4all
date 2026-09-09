@@ -24,6 +24,13 @@ function getDatabase() {
 }
 
 function createMainWindow() {
+  const iconPath = path.join(__dirname, '../renderer/assets/icon.png');
+  if (process.platform === 'darwin' && app.dock && fs.existsSync(iconPath)) {
+    try {
+      app.dock.setIcon(iconPath);
+    } catch (e) {}
+  }
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 920,
@@ -31,6 +38,7 @@ function createMainWindow() {
     minHeight: 700,
     backgroundColor: '#000000',
     title: 'URL Inspector',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
