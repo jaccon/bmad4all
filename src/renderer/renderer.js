@@ -9,6 +9,8 @@
 
   // State
   let isAuditing = false;
+  let initialLoadDone = false;
+  let lazySettleTimer = null;
   let currentFilter = 'all';
   let currentApiOrigin = 'all';
   let currentHttpStatus = 'all';
@@ -27,8 +29,10 @@
   };
   let lastStats = {
     totalRequests: 0,
-    totalBytes: 0,
-    failedRequests: 0
+    completedRequests: 0,
+    failedRequests: 0,
+    pendingRequests: 0,
+    totalBytes: 0
   };
   let currentThrottlingProfile = 'none';
 
@@ -522,6 +526,11 @@
   }
 
   function resetStateForAudit() {
+    if (lazySettleTimer) {
+      clearTimeout(lazySettleTimer);
+      lazySettleTimer = null;
+    }
+    initialLoadDone = false;
     requestsMap.clear();
     allCapturedRequestsMap.clear();
     orderedRowIds.length = 0;
@@ -532,7 +541,12 @@
     lastLoadTimeMs = 0;
     currentOverallScore = null;
     currentMetrics = { LCP: null, FCP: null, CLS: null, TTFB: null, INP: null };
-    lastStats = { totalRequests: 0, totalBytes: 0, failedRequests: 0 };
+    lastStats = { totalRequests: 0, completedRequests: 0, failedRequests: 0, pendingRequests: 0, totalBytes: 0 };
+
+    if (progressBar) {
+      progressBar.classList.remove('progress-bar-loading');
+      progressBar.style.width = '0%';
+    }
 
     // Reset API dropdown
     if (apiOriginSelect) {
@@ -577,14 +591,22 @@
   function setAuditingState(active, isError = false) {
     isAuditing = active;
     if (active) {
+      initialLoadDone = false;
+      if (lazySettleTimer) {
+        clearTimeout(lazySettleTimer);
+        lazySettleTimer = null;
+      }
       auditBtnText.textContent = 'Inspecting...';
       btnAudit.disabled = true;
       btnAudit.classList.add('btn-auditing');
       btnStop.classList.remove('hidden');
       if (btnRetry) btnRetry.classList.add('hidden');
       auditStatusBanner.classList.remove('hidden', 'banner-error');
-      if (statusDot) statusDot.className = 'status-indicator-dot pulse';
-      progressBar.style.width = '10%';
+      if (statusDot) statusDot.className = 'status-indicator-dot loading pulse';
+      if (progressBar) {
+        progressBar.classList.remove('progress-bar-loading');
+        progressBar.style.width = '10%';
+      }
       auditStateLabel.textContent = 'Inspecting';
       auditStateLabel.style.color = 'var(--color-accent)';
     } else {
@@ -592,12 +614,37 @@
       btnAudit.disabled = false;
       btnAudit.classList.remove('btn-auditing');
       btnStop.classList.add('hidden');
-      auditStateLabel.textContent = isError ? 'Error' : 'Completed';
-      auditStateLabel.style.color = isError ? 'var(--color-poor)' : 'var(--color-good)';
 
-      if (!isError) {
-        progressBar.style.width = '100%';
-        if (statusDot) statusDot.className = 'status-indicator-dot';
+      if (isError) {
+        if (lazySettleTimer) {
+          clearTimeout(lazySettleTimer);
+          lazySettleTimer = null;
+        }
+        auditStateLabel.textContent = 'Error';
+        auditStateLabel.style.color = 'var(--color-poor)';
+        if (statusDot) statusDot.className = 'status-indicator-dot error';
+        if (progressBar) {
+          progressBar.classList.remove('progress-bar-loading');
+        }
+      } else {
+        const pending = lastStats ? (lastStats.pendingRequests || 0) : 0;
+        if (pending > 0) {
+          auditStateLabel.textContent = 'Loading';
+          auditStateLabel.style.color = 'var(--color-accent)';
+          if (statusDot) statusDot.className = 'status-indicator-dot loading pulse';
+          if (progressBar) {
+            progressBar.classList.add('progress-bar-loading');
+            progressBar.style.width = '100%';
+          }
+        } else {
+          auditStateLabel.textContent = 'Completed';
+          auditStateLabel.style.color = 'var(--color-good)';
+          if (statusDot) statusDot.className = 'status-indicator-dot';
+          if (progressBar) {
+            progressBar.classList.remove('progress-bar-loading');
+            progressBar.style.width = '100%';
+          }
+        }
       }
     }
   }
@@ -708,7 +755,7 @@
           await window.electronAPI.stopAudit();
         }
         setAuditingState(false);
-        statusMessage.textContent = 'Audit stopped by user.';
+        statusMessage.textContent = 'Inspection stopped by user.';
         saveCurrentAuditToHistory('stopped');
       });
     }
@@ -893,14 +940,68 @@
     if (!stats) return;
     lastStats = stats;
 
-    if (summaryTotalReqs) summaryTotalReqs.textContent = stats.totalRequests || 0;
+    const total = stats.totalRequests || 0;
+    const completed = stats.completedRequests || 0;
+    const failed = stats.failedRequests || 0;
+    const pending = typeof stats.pendingRequests === 'number'
+      ? stats.pendingRequests
+      : Math.max(0, total - completed - failed);
+
+    if (summaryTotalReqs) summaryTotalReqs.textContent = total;
     if (summaryTotalBytes) summaryTotalBytes.textContent = formatBytes(stats.totalBytes || 0);
-    if (summaryFailedReqs) summaryFailedReqs.textContent = stats.failedRequests || 0;
-    if (reqCounter) reqCounter.textContent = `${stats.totalRequests || 0} requests captured`;
+    if (summaryFailedReqs) summaryFailedReqs.textContent = failed;
 
     if (typeof stats.totalBytes === 'number' && stats.totalBytes > 0) {
       lastTotalBytes = stats.totalBytes;
       updateThroughputComparison();
+    }
+
+    if (pending > 0) {
+      if (lazySettleTimer) {
+        clearTimeout(lazySettleTimer);
+        lazySettleTimer = null;
+      }
+      if (statusDot && !statusDot.classList.contains('error')) {
+        statusDot.className = 'status-indicator-dot loading pulse';
+      }
+      if (auditStateLabel && auditStateLabel.textContent !== 'Error') {
+        auditStateLabel.textContent = 'Loading';
+        auditStateLabel.style.color = 'var(--color-accent)';
+      }
+      if (progressBar) {
+        progressBar.classList.add('progress-bar-loading');
+      }
+      if (reqCounter) {
+        reqCounter.textContent = `${total} requests captured (${pending} active)`;
+      }
+      if (initialLoadDone && statusMessage) {
+        statusMessage.textContent = `Loading lazy resources... (${pending} active, ${total} captured)`;
+      }
+    } else {
+      if (reqCounter) {
+        reqCounter.textContent = `${total} requests captured`;
+      }
+      if (initialLoadDone) {
+        if (lazySettleTimer) clearTimeout(lazySettleTimer);
+        lazySettleTimer = setTimeout(() => {
+          lazySettleTimer = null;
+          if (statusDot && !statusDot.classList.contains('error')) {
+            statusDot.className = 'status-indicator-dot';
+          }
+          if (auditStateLabel && auditStateLabel.textContent !== 'Error') {
+            auditStateLabel.textContent = 'Completed';
+            auditStateLabel.style.color = 'var(--color-good)';
+          }
+          if (progressBar) {
+            progressBar.classList.remove('progress-bar-loading');
+            progressBar.style.width = '100%';
+          }
+          if (statusMessage) {
+            const timeStr = lastLoadTimeMs > 0 ? ` (${(lastLoadTimeMs / 1000).toFixed(2)}s)` : '';
+            statusMessage.textContent = `Network idle. All ${total} resources loaded${timeStr}.`;
+          }
+        }, 300);
+      }
     }
   }
 
@@ -1497,26 +1598,76 @@
 
     window.electronAPI.onStatus((data) => {
       if (!data) return;
-      statusMessage.textContent = data.message || data.status;
 
       if (data.status === 'starting') {
-        progressBar.style.width = '20%';
+        initialLoadDone = false;
+        if (lazySettleTimer) {
+          clearTimeout(lazySettleTimer);
+          lazySettleTimer = null;
+        }
+        statusMessage.textContent = data.message || 'Starting inspection...';
+        if (progressBar) {
+          progressBar.classList.remove('progress-bar-loading');
+          progressBar.style.width = '20%';
+        }
       } else if (data.status === 'navigating') {
-        progressBar.style.width = '45%';
+        statusMessage.textContent = data.message || 'Connecting and streaming network requests...';
+        if (progressBar) progressBar.style.width = '45%';
       } else if (data.status === 'dom-ready') {
-        progressBar.style.width = '75%';
+        statusMessage.textContent = data.message || 'DOM loaded. Evaluating performance metrics...';
+        if (progressBar) progressBar.style.width = '75%';
       } else if (data.status === 'completed') {
-        progressBar.style.width = '100%';
+        initialLoadDone = true;
         setAuditingState(false);
         if (data.totalLoadTime) {
           summaryLoadTime.textContent = (data.totalLoadTime / 1000).toFixed(2) + ' s';
           lastLoadTimeMs = data.totalLoadTime;
           updateThroughputComparison();
         }
-        showToast('Audit completed successfully', 'success', 3000);
+
+        const pending = lastStats ? (lastStats.pendingRequests || 0) : 0;
+        const total = lastStats ? (lastStats.totalRequests || 0) : 0;
+
+        if (pending > 0) {
+          if (statusDot) statusDot.className = 'status-indicator-dot loading pulse';
+          if (auditStateLabel) {
+            auditStateLabel.textContent = 'Loading';
+            auditStateLabel.style.color = 'var(--color-accent)';
+          }
+          if (progressBar) {
+            progressBar.classList.add('progress-bar-loading');
+            progressBar.style.width = '100%';
+          }
+          statusMessage.textContent = `Loading lazy resources... (${pending} active, ${total} captured)`;
+          if (reqCounter) {
+            reqCounter.textContent = `${total} requests captured (${pending} active)`;
+          }
+        } else {
+          if (statusDot) statusDot.className = 'status-indicator-dot';
+          if (auditStateLabel) {
+            auditStateLabel.textContent = 'Completed';
+            auditStateLabel.style.color = 'var(--color-good)';
+          }
+          if (progressBar) {
+            progressBar.classList.remove('progress-bar-loading');
+            progressBar.style.width = '100%';
+          }
+          const timeStr = lastLoadTimeMs > 0 ? ` (${(lastLoadTimeMs / 1000).toFixed(2)}s)` : '';
+          const msg = data.message && !data.message.includes('tempo limite')
+            ? data.message
+            : `Network idle. All ${total} resources loaded${timeStr}.`;
+          statusMessage.textContent = msg;
+        }
+
+        showToast('Initial inspection completed', 'success', 2500);
         saveCurrentAuditToHistory('completed');
       } else if (data.status === 'failed' || data.status === 'stopped') {
         const isFail = data.status === 'failed';
+        initialLoadDone = true;
+        if (lazySettleTimer) {
+          clearTimeout(lazySettleTimer);
+          lazySettleTimer = null;
+        }
         setAuditingState(false, isFail);
         if (isFail) {
           auditStatusBanner.classList.add('banner-error');
@@ -1527,6 +1678,14 @@
           statusMessage.textContent = `Load failed: ${errMsg}${codeInfo}`;
           showToast(`Connection failed: ${errMsg}${codeInfo}`, 'error');
           saveCurrentAuditToHistory('failed', `${errMsg}${codeInfo}`);
+        } else {
+          if (statusDot) statusDot.className = 'status-indicator-dot';
+          if (auditStateLabel) {
+            auditStateLabel.textContent = 'Stopped';
+            auditStateLabel.style.color = 'var(--text-secondary)';
+          }
+          statusMessage.textContent = data.message || 'Inspection stopped.';
+          showToast('Inspection stopped', 'info', 2000);
         }
       }
     });
@@ -1568,6 +1727,11 @@
     });
 
     window.electronAPI.onError((err) => {
+      initialLoadDone = true;
+      if (lazySettleTimer) {
+        clearTimeout(lazySettleTimer);
+        lazySettleTimer = null;
+      }
       setAuditingState(false, true);
       const msg = err ? (err.message || String(err)) : 'Unknown error';
       statusMessage.textContent = `Error: ${msg}`;

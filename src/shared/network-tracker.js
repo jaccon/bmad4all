@@ -11,6 +11,7 @@ class NetworkTracker {
       totalRequests: 0,
       completedRequests: 0,
       failedRequests: 0,
+      pendingRequests: 0,
       totalBytes: 0,
       typeCounts: {
         all: 0,
@@ -35,6 +36,7 @@ class NetworkTracker {
       totalRequests: 0,
       completedRequests: 0,
       failedRequests: 0,
+      pendingRequests: 0,
       totalBytes: 0,
       typeCounts: {
         all: 0,
@@ -122,6 +124,7 @@ class NetworkTracker {
       }
       this.orderedIds.push(id);
       this.stats.totalRequests++;
+      this.stats.pendingRequests = Math.max(0, this.stats.totalRequests - this.stats.completedRequests - this.stats.failedRequests);
       this.stats.typeCounts.all++;
       if (isApi) {
         this.stats.typeCounts.api++;
@@ -250,7 +253,11 @@ class NetworkTracker {
     if (!record) return null;
 
     if (record.status !== 'completed') {
+      if (record.status === 'failed') {
+        this.stats.failedRequests = Math.max(0, this.stats.failedRequests - 1);
+      }
       this.stats.completedRequests++;
+      this.stats.pendingRequests = Math.max(0, this.stats.totalRequests - this.stats.completedRequests - this.stats.failedRequests);
     }
     record.status = 'completed';
 
@@ -280,7 +287,11 @@ class NetworkTracker {
     if (!record) return null;
 
     if (record.status !== 'failed') {
+      if (record.status === 'completed') {
+        this.stats.completedRequests = Math.max(0, this.stats.completedRequests - 1);
+      }
       this.stats.failedRequests++;
+      this.stats.pendingRequests = Math.max(0, this.stats.totalRequests - this.stats.completedRequests - this.stats.failedRequests);
     }
     record.status = 'failed';
     record.errorText = errorText || 'Failed';
@@ -299,7 +310,10 @@ class NetworkTracker {
   }
 
   getStats() {
-    return { ...this.stats };
+    return {
+      ...this.stats,
+      pendingRequests: Math.max(0, this.stats.totalRequests - this.stats.completedRequests - this.stats.failedRequests)
+    };
   }
 
   filter({ category = 'all', search = '', status = 'all', httpStatus = 'all', onlyApi = false, apiOrigin = '' } = {}) {

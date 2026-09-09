@@ -451,5 +451,35 @@ describe('NetworkTracker', () => {
     assert.equal(item.duration, item.durationMs);
     assert.equal(item.remotePort, 443);
   });
+
+  test('accurately tracks pending in-flight requests across start, complete, and fail', () => {
+    const tracker = new NetworkTracker();
+    assert.equal(tracker.getStats().pendingRequests, 0);
+
+    tracker.onRequestWillBeSent({ requestId: 'r1', request: { url: 'https://site.com/img1.png' } });
+    assert.equal(tracker.getStats().totalRequests, 1);
+    assert.equal(tracker.getStats().pendingRequests, 1);
+
+    tracker.onRequestWillBeSent({ requestId: 'r2', request: { url: 'https://site.com/img2.png' } });
+    assert.equal(tracker.getStats().totalRequests, 2);
+    assert.equal(tracker.getStats().pendingRequests, 2);
+
+    tracker.onLoadingFinished({ requestId: 'r1' });
+    assert.equal(tracker.getStats().completedRequests, 1);
+    assert.equal(tracker.getStats().pendingRequests, 1);
+
+    tracker.onLoadingFailed({ requestId: 'r2', errorText: 'net::ERR_FAILED' });
+    assert.equal(tracker.getStats().failedRequests, 1);
+    assert.equal(tracker.getStats().pendingRequests, 0);
+
+    // New lazy load request arrives later
+    tracker.onRequestWillBeSent({ requestId: 'r3-lazy', request: { url: 'https://site.com/lazy.jpg' } });
+    assert.equal(tracker.getStats().totalRequests, 3);
+    assert.equal(tracker.getStats().pendingRequests, 1);
+
+    tracker.onLoadingFinished({ requestId: 'r3-lazy' });
+    assert.equal(tracker.getStats().completedRequests, 2);
+    assert.equal(tracker.getStats().pendingRequests, 0);
+  });
 });
 

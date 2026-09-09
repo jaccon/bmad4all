@@ -485,15 +485,19 @@ button,
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  background-color: var(--color-good);
+  transition: background-color 0.2s ease;
+}
+
+.status-indicator-dot.loading,
+.status-indicator-dot.pulse {
   background-color: var(--color-accent);
+  animation: pulse 1.5s infinite;
 }
 
 .status-indicator-dot.error {
   background-color: var(--color-poor);
-}
-
-.status-indicator-dot.pulse {
-  animation: pulse 1.5s infinite;
+  animation: none;
 }
 
 @keyframes pulse {
@@ -537,6 +541,21 @@ button,
   width: 0%;
   background: var(--color-accent);
   transition: width 0.3s ease;
+}
+
+.progress-bar-fill.progress-bar-loading {
+  background: linear-gradient(90deg, #0284c7 0%, #38bdf8 50%, #0284c7 100%);
+  background-size: 200% 100%;
+  animation: progressBarShimmer 1.5s infinite linear;
+}
+
+@keyframes progressBarShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Vitals Panel */

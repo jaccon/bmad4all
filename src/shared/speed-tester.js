@@ -5,7 +5,7 @@ const { URL } = require('url');
 const THROTTLING_PROFILES = {
   none: {
     id: 'none',
-    name: 'Banda Real (Sem Limitação)',
+    name: 'Real Bandwidth (No Throttling)',
     latency: 0,
     downloadThroughput: -1,
     uploadThroughput: -1,

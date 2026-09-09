@@ -137,10 +137,15 @@ class SiteAuditor {
     if (this.auditTimeoutTimer) clearTimeout(this.auditTimeoutTimer);
     this.auditTimeoutTimer = setTimeout(() => {
       if (this.isRunning) {
+        const stats = this.networkTracker.getStats();
+        const pendingCount = stats.pendingRequests || 0;
+        const message = pendingCount > 0
+          ? `Monitoring active background requests (${pendingCount} active in-flight)...`
+          : 'Inspection idle timeout reached (45s). Network settled.';
         this.emit('audit:status', {
           status: 'completed',
           url: this.activeUrl,
-          message: 'Auditoria finalizada por tempo limite (45s).'
+          message
         });
       }
     }, 45000);
@@ -148,7 +153,7 @@ class SiteAuditor {
     this.emit('audit:status', {
       status: 'starting',
       url,
-      message: `Iniciando auditoria para ${url}...`
+      message: `Starting inspection for ${url}...`
     });
 
     try {
@@ -184,7 +189,7 @@ class SiteAuditor {
         this.emit('audit:status', {
           status: 'failed',
           url: this.activeUrl,
-          message: `Processo de renderização terminou inesperadamente: ${details.reason}`
+          message: `Renderer process terminated unexpectedly: ${details.reason}`
         });
       });
 
@@ -242,7 +247,7 @@ class SiteAuditor {
       this.emit('audit:status', {
         status: 'navigating',
         url,
-        message: 'Conectando e transmitindo requisições de rede...'
+        message: 'Connecting and streaming network requests...'
       });
 
       // Track lifecycle events
@@ -251,7 +256,7 @@ class SiteAuditor {
         this.emit('audit:status', {
           status: 'loading',
           url,
-          message: 'Carregando recursos e renderizando página...'
+          message: 'Loading resources and rendering page...'
         });
       });
 
@@ -260,7 +265,7 @@ class SiteAuditor {
         this.emit('audit:status', {
           status: 'dom-ready',
           url,
-          message: 'DOM carregado. Avaliando métricas de performance...'
+          message: 'DOM loaded. Evaluating performance metrics...'
         });
         await this.extractFallbackMetrics();
       });
@@ -296,7 +301,7 @@ class SiteAuditor {
             status: 'completed',
             url,
             totalLoadTime,
-            message: `Carregamento concluído em ${(totalLoadTime / 1000).toFixed(2)}s. Auditoria ativa monitorando requisições assíncronas.`
+            message: `Initial load complete in ${(totalLoadTime / 1000).toFixed(2)}s. Monitoring lazy-loaded resources...`
           });
         }, 600);
       });
@@ -309,7 +314,7 @@ class SiteAuditor {
           url: validatedURL,
           errorCode,
           errorDescription,
-          message: `Falha no carregamento: ${errorDescription} (${errorCode})`
+          message: `Load failed: ${errorDescription} (${errorCode})`
         });
       });
 
@@ -322,7 +327,7 @@ class SiteAuditor {
       this.emit('audit:status', {
         status: 'failed',
         url: this.activeUrl,
-        message: `Erro ao auditar página: ${err.message}`
+        message: `Error inspecting page: ${err.message}`
       });
     }
   }
@@ -473,7 +478,7 @@ class SiteAuditor {
       if (this.isRunning && details) {
         const record = this.networkTracker.onLoadingFailed({
           requestId: String(details.id),
-          errorText: details.error || 'Erro de rede',
+          errorText: details.error || 'Network error',
           timestamp: details.timestamp / 1000
         });
         if (record) {
@@ -580,7 +585,7 @@ class SiteAuditor {
     this.emit('audit:status', {
       status: 'stopped',
       url: this.activeUrl,
-      message: 'Auditoria interrompida.'
+      message: 'Inspection stopped.'
     });
   }
 }
