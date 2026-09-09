@@ -1,5 +1,6 @@
 /**
  * Renderer Controller - PageSpeed & Network Monitor
+ * English Translation, SQLite History, Pure Black Dark Theme
  * Hardened against XSS, DOM Flooding, Memory Leaks
  */
 
@@ -16,6 +17,21 @@
   let clientPingMs = 0;
   let lastTotalBytes = 0;
   let lastLoadTimeMs = 0;
+  let currentOverallScore = null;
+  let currentMetrics = {
+    LCP: null,
+    FCP: null,
+    CLS: null,
+    TTFB: null,
+    INP: null
+  };
+  let lastStats = {
+    totalRequests: 0,
+    totalBytes: 0,
+    failedRequests: 0
+  };
+  let currentThrottlingProfile = 'none';
+
   const detectedApiOrigins = new Map(); // origin -> count
   const detectedStatusCodes = new Set(); // set of unique status codes observed
   const requestsMap = new Map(); // id -> { rowEl, req }
@@ -30,13 +46,13 @@
   // DOM Elements
   const clockTimeEl = document.getElementById('clockTime');
   const clockDateEl = document.getElementById('clockDate');
-  const userWidgetEl = document.getElementById('userWidget');
 
   const auditForm = document.getElementById('auditForm');
   const urlInput = document.getElementById('urlInput');
   const selectThrottling = document.getElementById('selectThrottling');
   const btnClearUrl = document.getElementById('btnClearUrl');
   const btnAudit = document.getElementById('btnAudit');
+  const auditBtnText = document.getElementById('auditBtnText');
   const btnStop = document.getElementById('btnStop');
 
   const auditStatusBanner = document.getElementById('auditStatusBanner');
@@ -90,21 +106,25 @@
     document: document.getElementById('countDoc')
   };
 
-  // Modal Elements
-  const loginModal = document.getElementById('loginModal');
-  const btnCloseModal = document.getElementById('btnCloseModal');
-  const btnCancelLogin = document.getElementById('btnCancelLogin');
-  const loginForm = document.getElementById('loginForm');
-  const inputEmail = document.getElementById('inputEmail');
-
   // Status Banner & Retry
   const statusDot = document.getElementById('statusDot');
   const btnRetry = document.getElementById('btnRetry');
   let lastAuditedUrl = '';
 
+  // History Elements (SQLite)
+  const btnOpenHistory = document.getElementById('btnOpenHistory');
+  const historyCountBadge = document.getElementById('historyCountBadge');
+  const historyModal = document.getElementById('historyModal');
+  const btnCloseHistoryModal = document.getElementById('btnCloseHistoryModal');
+  const btnClearHistory = document.getElementById('btnClearHistory');
+  const historyTableBody = document.getElementById('historyTableBody');
+  const historyEmptyState = document.getElementById('historyEmptyState');
+  const statHistoryTotal = document.getElementById('statHistoryTotal');
+  const statHistoryAvgScore = document.getElementById('statHistoryAvgScore');
+  const statHistoryAvgTime = document.getElementById('statHistoryAvgTime');
+
   // Drawer Elements
   const requestDrawer = document.getElementById('requestDrawer');
-  const drawerBackdrop = document.getElementById('drawerBackdrop');
   const btnCloseDrawer = document.getElementById('btnCloseDrawer');
   const btnCopyUrl = document.getElementById('btnCopyUrl');
   const drawerMethod = document.getElementById('drawerMethod');
@@ -133,12 +153,14 @@
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
-    clockTimeEl.textContent = `${hours}:${minutes}:${seconds}`;
+    if (clockTimeEl) clockTimeEl.textContent = `${hours}:${minutes}:${seconds}`;
 
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    clockDateEl.textContent = `${day}/${month}/${year}`;
+    if (clockDateEl) {
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      clockDateEl.textContent = `${year}-${month}-${day}`;
+    }
   }
   setInterval(updateClock, 1000);
   updateClock();
@@ -146,22 +168,11 @@
   /* -------------------------------------------------------------------------- */
   /* Toast Notifications                                                        */
   /* -------------------------------------------------------------------------- */
-  function showToast(message, type = 'info', duration = 4000) {
+  function showToast(message, type = 'info', duration = 3500) {
     if (!toastContainer) return;
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${sanitizeClass(type)}`;
-
-    const iconMap = {
-      warning: '⚠️',
-      error: '❌',
-      info: 'ℹ️',
-      success: '✅'
-    };
-
-    const iconSpan = document.createElement('span');
-    iconSpan.style.fontSize = '14px';
-    iconSpan.textContent = iconMap[type] || 'ℹ️';
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'toast-content';
@@ -170,10 +181,9 @@
     const closeBtn = document.createElement('button');
     closeBtn.className = 'toast-close';
     closeBtn.textContent = '✕';
-    closeBtn.setAttribute('aria-label', 'Fechar notificação');
+    closeBtn.setAttribute('aria-label', 'Dismiss notification');
     closeBtn.addEventListener('click', () => dismissToast(toast));
 
-    toast.appendChild(iconSpan);
     toast.appendChild(contentDiv);
     toast.appendChild(closeBtn);
 
@@ -197,245 +207,435 @@
   }
 
   /* -------------------------------------------------------------------------- */
-  /* User Authentication / Session State (XSS-Safe DOM creation)                */
+  /* SQLite History Controller                                                  */
   /* -------------------------------------------------------------------------- */
-  function loadUserSession() {
+  async function loadAuditHistory() {
+    if (!window.electronAPI || !window.electronAPI.getHistory) return;
+
     try {
-      const stored = localStorage.getItem('pagespeed_user');
-      if (stored) {
-        const user = JSON.parse(stored);
-        if (user && typeof user === 'object') {
-          renderUserLoggedIn(user);
-          return;
+      const history = await window.electronAPI.getHistory(100);
+      renderHistoryList(history || []);
+    } catch (e) {
+      console.error('[History] Failed to load history:', e);
+    }
+  }
+
+  function renderHistoryList(history) {
+    const count = history.length;
+    if (historyCountBadge) {
+      historyCountBadge.textContent = count;
+    }
+
+    if (statHistoryTotal) {
+      statHistoryTotal.textContent = count;
+    }
+
+    if (!historyTableBody) return;
+    historyTableBody.innerHTML = '';
+
+    if (count === 0) {
+      if (historyEmptyState) historyEmptyState.classList.remove('hidden');
+      if (statHistoryAvgScore) statHistoryAvgScore.textContent = '--';
+      if (statHistoryAvgTime) statHistoryAvgTime.textContent = '--';
+      return;
+    }
+
+    if (historyEmptyState) historyEmptyState.classList.add('hidden');
+
+    let sumScore = 0;
+    let scoreCount = 0;
+    let sumTime = 0;
+    let timeCount = 0;
+
+    history.forEach((item) => {
+      if (typeof item.overall_score === 'number' && item.overall_score >= 0) {
+        sumScore += item.overall_score;
+        scoreCount++;
+      }
+      if (typeof item.load_time_ms === 'number' && item.load_time_ms > 0) {
+        sumTime += item.load_time_ms;
+        timeCount++;
+      }
+
+      const tr = document.createElement('tr');
+
+      // Date / Time
+      const tdDate = document.createElement('td');
+      tdDate.style.fontFamily = 'var(--font-mono)';
+      tdDate.style.fontSize = '11px';
+      tdDate.style.color = 'var(--text-muted)';
+      try {
+        const d = new Date(item.created_at);
+        tdDate.textContent = d.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      } catch (e) {
+        tdDate.textContent = item.created_at || '--';
+      }
+
+      // Target URL
+      const tdUrl = document.createElement('td');
+      tdUrl.className = 'history-url-cell';
+      tdUrl.title = item.url || '';
+      tdUrl.textContent = item.url || '--';
+
+      // Score
+      const tdScore = document.createElement('td');
+      if (typeof item.overall_score === 'number') {
+        const pill = document.createElement('span');
+        pill.className = 'history-score-pill';
+        if (item.overall_score >= 90) {
+          pill.className += ' status-2xx';
+        } else if (item.overall_score >= 50) {
+          pill.className += ' status-4xx';
+        } else {
+          pill.className += ' status-5xx';
+        }
+        pill.textContent = item.overall_score;
+        tdScore.appendChild(pill);
+      } else {
+        tdScore.textContent = '--';
+      }
+
+      // Load Time
+      const tdTime = document.createElement('td');
+      tdTime.style.fontFamily = 'var(--font-mono)';
+      tdTime.textContent = item.load_time_ms ? `${(item.load_time_ms / 1000).toFixed(2)} s` : '--';
+
+      // Total Requests
+      const tdReqs = document.createElement('td');
+      tdReqs.style.fontFamily = 'var(--font-mono)';
+      tdReqs.textContent = item.total_requests !== null ? item.total_requests : '--';
+
+      // Size
+      const tdSize = document.createElement('td');
+      tdSize.style.fontFamily = 'var(--font-mono)';
+      tdSize.textContent = item.total_bytes ? formatBytes(item.total_bytes) : '--';
+
+      // Profile
+      const tdProfile = document.createElement('td');
+      tdProfile.style.fontSize = '11px';
+      tdProfile.style.color = 'var(--text-secondary)';
+      tdProfile.textContent = item.throttling && item.throttling !== 'none' ? item.throttling : 'Full Bandwidth';
+
+      // Tester Speed
+      const tdSpeed = document.createElement('td');
+      tdSpeed.style.fontFamily = 'var(--font-mono)';
+      tdSpeed.textContent = item.client_speed_mbps ? `${item.client_speed_mbps.toFixed(1)} Mbps` : '--';
+
+      // Status
+      const tdStatus = document.createElement('td');
+      const statusPill = document.createElement('span');
+      statusPill.className = 'status-pill';
+      if (item.status === 'completed') {
+        statusPill.className += ' status-2xx';
+        statusPill.textContent = 'Completed';
+      } else if (item.status === 'failed') {
+        statusPill.className += ' status-5xx';
+        statusPill.textContent = 'Failed';
+        statusPill.title = item.error_message || 'Audit failed';
+      } else {
+        statusPill.className += ' status-pending';
+        statusPill.textContent = item.status || 'Stopped';
+      }
+      tdStatus.appendChild(statusPill);
+
+      // Actions
+      const tdActions = document.createElement('td');
+      tdActions.style.textAlign = 'right';
+
+      const btnRun = document.createElement('button');
+      btnRun.type = 'button';
+      btnRun.className = 'btn-run-again';
+      btnRun.textContent = 'Run Again';
+      btnRun.title = `Rerun audit for ${item.url}`;
+      btnRun.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeHistoryModal();
+        if (urlInput) urlInput.value = item.url;
+        if (selectThrottling && item.throttling) {
+          selectThrottling.value = item.throttling;
+        }
+        triggerAudit(item.url);
+      });
+
+      const btnDel = document.createElement('button');
+      btnDel.type = 'button';
+      btnDel.className = 'btn-delete-history';
+      btnDel.textContent = '✕';
+      btnDel.title = 'Delete record from SQLite';
+      btnDel.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (window.electronAPI && window.electronAPI.deleteAuditHistory) {
+          await window.electronAPI.deleteAuditHistory(item.id);
+          await loadAuditHistory();
+          showToast('Record removed from history', 'info', 2000);
+        }
+      });
+
+      tdActions.appendChild(btnRun);
+      tdActions.appendChild(btnDel);
+
+      tr.appendChild(tdDate);
+      tr.appendChild(tdUrl);
+      tr.appendChild(tdScore);
+      tr.appendChild(tdTime);
+      tr.appendChild(tdReqs);
+      tr.appendChild(tdSize);
+      tr.appendChild(tdProfile);
+      tr.appendChild(tdSpeed);
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdActions);
+
+      historyTableBody.appendChild(tr);
+    });
+
+    if (statHistoryAvgScore) {
+      statHistoryAvgScore.textContent = scoreCount > 0 ? Math.round(sumScore / scoreCount) : '--';
+    }
+    if (statHistoryAvgTime) {
+      statHistoryAvgTime.textContent = timeCount > 0 ? `${(sumTime / timeCount / 1000).toFixed(2)} s` : '--';
+    }
+  }
+
+  function openHistoryModal() {
+    if (!historyModal) return;
+    historyModal.classList.remove('hidden');
+    loadAuditHistory();
+  }
+
+  function closeHistoryModal() {
+    if (!historyModal) return;
+    historyModal.classList.add('hidden');
+  }
+
+  async function saveCurrentAuditToHistory(status = 'completed', errorMsg = null) {
+    if (!window.electronAPI || !window.electronAPI.saveAuditHistory) return;
+    if (!lastAuditedUrl) return;
+
+    try {
+      const record = {
+        url: lastAuditedUrl,
+        overallScore: currentOverallScore,
+        lcp: currentMetrics.LCP,
+        fcp: currentMetrics.FCP,
+        cls: currentMetrics.CLS,
+        ttfb: currentMetrics.TTFB,
+        inp: currentMetrics.INP,
+        totalRequests: lastStats.totalRequests || 0,
+        totalBytes: lastStats.totalBytes || 0,
+        loadTimeMs: lastLoadTimeMs || 0,
+        throttling: currentThrottlingProfile || 'none',
+        clientSpeedMbps: clientSpeedMbps > 0 ? clientSpeedMbps : null,
+        clientPingMs: clientPingMs > 0 ? clientPingMs : null,
+        status: status,
+        errorMessage: errorMsg,
+        createdAt: new Date().toISOString()
+      };
+
+      await window.electronAPI.saveAuditHistory(record);
+      await loadAuditHistory();
+    } catch (err) {
+      console.error('[History] Error persisting audit to SQLite:', err);
+    }
+  }
+
+  function setupHistoryEvents() {
+    if (btnOpenHistory) {
+      btnOpenHistory.addEventListener('click', openHistoryModal);
+    }
+    if (btnCloseHistoryModal) {
+      btnCloseHistoryModal.addEventListener('click', closeHistoryModal);
+    }
+    if (btnClearHistory) {
+      btnClearHistory.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to delete all audit records from SQLite?')) return;
+        if (window.electronAPI && window.electronAPI.clearAuditHistory) {
+          await window.electronAPI.clearAuditHistory();
+          await loadAuditHistory();
+          showToast('Audit history cleared', 'info', 2500);
+        }
+      });
+    }
+
+    if (historyModal) {
+      historyModal.addEventListener('click', (e) => {
+        if (e.target === historyModal) {
+          closeHistoryModal();
+        }
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (historyModal && !historyModal.classList.contains('hidden')) {
+          closeHistoryModal();
         }
       }
-    } catch (e) {}
-    renderUserLoggedOut();
-  }
-
-  function renderUserLoggedIn(user) {
-    const rawEmail = String(user.email || '');
-    const rawName = String(user.name || rawEmail.split('@')[0] || 'Usuário');
-    const initials = (rawName || 'U').slice(0, 2).toUpperCase();
-
-    userWidgetEl.innerHTML = ''; // clear
-
-    const badgeDiv = document.createElement('div');
-    badgeDiv.className = 'user-badge';
-    badgeDiv.title = `Conectado como ${rawEmail}`;
-
-    const avatarDiv = document.createElement('div');
-    avatarDiv.className = 'user-avatar';
-    avatarDiv.textContent = initials;
-
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = rawName;
-
-    const logoutBtn = document.createElement('button');
-    logoutBtn.className = 'btn-clear';
-    logoutBtn.title = 'Sair';
-    logoutBtn.style.marginLeft = '4px';
-    logoutBtn.textContent = '🚪';
-    logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('pagespeed_user');
-      loadUserSession();
-    });
-
-    badgeDiv.appendChild(avatarDiv);
-    badgeDiv.appendChild(nameSpan);
-    badgeDiv.appendChild(logoutBtn);
-    userWidgetEl.appendChild(badgeDiv);
-  }
-
-  function renderUserLoggedOut() {
-    userWidgetEl.innerHTML = '';
-    const loginBtn = document.createElement('button');
-    loginBtn.className = 'btn btn-secondary btn-sm';
-    loginBtn.id = 'btnLogin';
-
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'btn-icon';
-    iconSpan.textContent = '👤';
-
-    const textSpan = document.createElement('span');
-    textSpan.textContent = 'Entrar';
-
-    loginBtn.appendChild(iconSpan);
-    loginBtn.appendChild(textSpan);
-    loginBtn.addEventListener('click', () => {
-      loginModal.classList.remove('hidden');
-      inputEmail.focus();
-    });
-
-    userWidgetEl.appendChild(loginBtn);
-  }
-
-  function setupAuthEvents() {
-    btnCloseModal.addEventListener('click', () => loginModal.classList.add('hidden'));
-    btnCancelLogin.addEventListener('click', () => loginModal.classList.add('hidden'));
-    loginForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const email = inputEmail.value.trim();
-      if (!email) return;
-      const user = {
-        email,
-        name: email.split('@')[0],
-        token: 'mock-session-token-' + Date.now()
-      };
-      localStorage.setItem('pagespeed_user', JSON.stringify(user));
-      loginModal.classList.add('hidden');
-      loginForm.reset();
-      loadUserSession();
     });
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Form & Audit Controls                                                      */
+  /* URL Validation & Form Submission                                           */
   /* -------------------------------------------------------------------------- */
-  function resetDashboard() {
-    closeDrawer();
+  function normalizeInputUrl(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+    let val = raw.trim();
+    if (!val) return '';
+    if (!/^https?:\/\//i.test(val)) {
+      val = 'https://' + val;
+    }
+    return val;
+  }
+
+  function resetStateForAudit() {
     requestsMap.clear();
     orderedRowIds.length = 0;
-    pendingUpdates.clear();
+    detectedApiOrigins.clear();
+    detectedStatusCodes.clear();
     maxDurationSeen = 100;
-    networkTableBody.innerHTML = '';
-    networkTableBody.appendChild(emptyStateRow);
-    emptyStateRow.classList.remove('hidden');
+    lastTotalBytes = 0;
+    lastLoadTimeMs = 0;
+    currentOverallScore = null;
+    currentMetrics = { LCP: null, FCP: null, CLS: null, TTFB: null, INP: null };
+    lastStats = { totalRequests: 0, totalBytes: 0, failedRequests: 0 };
+
+    // Reset API dropdown
+    if (apiOriginSelect) {
+      apiOriginSelect.innerHTML = '<option value="all">All APIs</option>';
+      apiOriginSelect.classList.add('hidden');
+      currentApiOrigin = 'all';
+    }
+
+    // Reset HTTP status dropdown to 'all'
+    if (statusFilterSelect) {
+      statusFilterSelect.value = 'all';
+      currentHttpStatus = 'all';
+    }
 
     // Reset counts
     Object.values(countEls).forEach(el => { if (el) el.textContent = '0'; });
-    reqCounter.textContent = '0 requisições capturadas';
+    if (reqCounter) reqCounter.textContent = '0 requests captured';
 
-    // Reset vitals
-    setScore(null);
-    setVital('LCP', null);
-    setVital('FCP', null);
-    setVital('CLS', null);
-    setVital('TTFB', null);
-
-    summaryTotalReqs.textContent = '0';
-    summaryTotalBytes.textContent = '0 B';
-    summaryLoadTime.textContent = '--';
-    summaryFailedReqs.textContent = '0';
-
-    detectedApiOrigins.clear();
-    currentApiOrigin = 'all';
-    if (apiOriginSelect) {
-      apiOriginSelect.innerHTML = '<option value="all">Todas as APIs</option>';
-      apiOriginSelect.classList.add('hidden');
-    }
-
-    detectedStatusCodes.clear();
-    currentHttpStatus = 'all';
-    if (statusFilterSelect) {
-      statusFilterSelect.value = 'all';
-      const optGroup = statusFilterSelect.querySelector('optgroup[data-dynamic="true"]');
-      if (optGroup) optGroup.remove();
-    }
-
-    lastTotalBytes = 0;
-    lastLoadTimeMs = 0;
+    // Reset summary cards
+    if (summaryTotalReqs) summaryTotalReqs.textContent = '0';
+    if (summaryTotalBytes) summaryTotalBytes.textContent = '0 B';
+    if (summaryLoadTime) summaryLoadTime.textContent = '--';
     if (summaryEffectiveThroughput) summaryEffectiveThroughput.textContent = '-- Mbps';
+    if (summaryFailedReqs) summaryFailedReqs.textContent = '0';
 
-    progressBar.style.width = '0%';
-    auditStatusBanner.classList.remove('banner-error');
-    if (statusDot) statusDot.className = 'status-indicator-dot pulse';
-    if (btnRetry) btnRetry.classList.add('hidden');
+    // Reset Vitals
+    setScore(null);
+    resetVitals();
+
+    // Reset Table
+    if (networkTableBody) {
+      networkTableBody.innerHTML = '';
+      if (emptyStateRow) {
+        networkTableBody.appendChild(emptyStateRow);
+        emptyStateRow.classList.remove('hidden');
+      }
+    }
+
+    closeDrawer();
   }
 
   function setAuditingState(active, isError = false) {
     isAuditing = active;
-    const auditBtnIcon = document.getElementById('auditBtnIcon');
-    const auditBtnText = document.getElementById('auditBtnText');
-
     if (active) {
-      if (auditBtnIcon) auditBtnIcon.textContent = '⏳';
-      if (auditBtnText) auditBtnText.textContent = 'Analisando...';
-      btnAudit.classList.remove('hidden');
+      auditBtnText.textContent = 'Analyzing...';
+      btnAudit.disabled = true;
       btnAudit.classList.add('btn-auditing');
       btnStop.classList.remove('hidden');
+      if (btnRetry) btnRetry.classList.add('hidden');
       auditStatusBanner.classList.remove('hidden', 'banner-error');
       if (statusDot) statusDot.className = 'status-indicator-dot pulse';
-      if (btnRetry) btnRetry.classList.add('hidden');
-      auditStateLabel.textContent = 'Analisando...';
+      progressBar.style.width = '10%';
+      auditStateLabel.textContent = 'Auditing';
       auditStateLabel.style.color = 'var(--color-accent)';
     } else {
-      if (auditBtnIcon) auditBtnIcon.textContent = '🚀';
-      if (auditBtnText) auditBtnText.textContent = 'Analisar Site';
-      btnAudit.classList.remove('hidden', 'btn-auditing');
+      auditBtnText.textContent = 'Start Audit';
+      btnAudit.disabled = false;
+      btnAudit.classList.remove('btn-auditing');
       btnStop.classList.add('hidden');
-      if (isError) {
-        auditStateLabel.textContent = 'Erro no Carregamento';
-        auditStateLabel.style.color = 'var(--color-poor)';
-      } else {
-        auditStateLabel.textContent = 'Concluído';
-        auditStateLabel.style.color = 'var(--color-good)';
+      auditStateLabel.textContent = isError ? 'Error' : 'Completed';
+      auditStateLabel.style.color = isError ? 'var(--color-poor)' : 'var(--color-good)';
+
+      if (!isError) {
+        progressBar.style.width = '100%';
+        if (statusDot) statusDot.className = 'status-indicator-dot';
       }
     }
   }
 
-  async function triggerAudit(url) {
-    if (!url || !url.trim()) {
-      showToast('Por favor, informe uma URL para analisar (ex: https://example.com)', 'warning');
-      urlInput.focus();
+  async function triggerAudit(rawUrl) {
+    if (!rawUrl || isAuditing) return;
+    const url = normalizeInputUrl(rawUrl);
+    if (!url) {
+      showToast('Please enter a valid URL (e.g. example.com)', 'warning');
       return;
     }
 
-    const trimmed = url.trim();
-    // Validate protocol scheme if provided
-    const schemeMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
-    if (schemeMatch) {
-      const proto = schemeMatch[1].toLowerCase();
-      if (!['http', 'https'].includes(proto)) {
-        showToast(`Protocolo "${proto}:" não permitido. Utilize http:// ou https://`, 'error');
-        urlInput.focus();
-        return;
-      }
+    try {
+      new URL(url);
+    } catch (e) {
+      showToast('Invalid URL format', 'error');
+      return;
     }
 
-    if (isAuditing) {
-      if (window.electronAPI) {
-        try {
-          await window.electronAPI.stopAudit();
-        } catch (e) {
-          console.warn('Erro ao interromper auditoria anterior:', e);
-        }
-      }
-    }
-
-    lastAuditedUrl = trimmed;
-    resetDashboard();
+    lastAuditedUrl = url;
+    resetStateForAudit();
     setAuditingState(true);
 
     const throttling = selectThrottling ? selectThrottling.value : 'none';
+    currentThrottlingProfile = throttling;
+
+    statusMessage.textContent = `Connecting to ${url}...`;
+    showToast(`Starting audit: ${url}`, 'info', 2500);
 
     if (window.electronAPI) {
       try {
-        await window.electronAPI.startAudit(trimmed, throttling);
+        const res = await window.electronAPI.startAudit({ url, throttling });
+        if (res && !res.ok) {
+          setAuditingState(false, true);
+          statusMessage.textContent = `Failed: ${res.error || 'Connection error'}`;
+          auditStatusBanner.classList.add('banner-error');
+          if (statusDot) statusDot.className = 'status-indicator-dot error';
+          if (btnRetry) btnRetry.classList.remove('hidden');
+          showToast(`Audit failed: ${res.error}`, 'error');
+          saveCurrentAuditToHistory('failed', res.error);
+        }
       } catch (err) {
         setAuditingState(false, true);
-        const errMsg = err.message || String(err);
-        statusMessage.textContent = 'Erro ao disparar auditoria: ' + errMsg;
+        const errMsg = err.message || 'Audit start failed';
+        statusMessage.textContent = `Error: ${errMsg}`;
         auditStatusBanner.classList.add('banner-error');
         if (statusDot) statusDot.className = 'status-indicator-dot error';
         if (btnRetry) btnRetry.classList.remove('hidden');
-        showToast(`Erro na auditoria: ${errMsg}`, 'error');
+        showToast(errMsg, 'error');
+        saveCurrentAuditToHistory('failed', errMsg);
       }
-    } else {
-      console.warn('Electron API não disponível');
     }
   }
 
   function setupAuditControls() {
+    if (!auditForm) return;
+
     auditForm.addEventListener('submit', (e) => {
       e.preventDefault();
       triggerAudit(urlInput.value);
     });
 
-    btnClearUrl.addEventListener('click', () => {
-      urlInput.value = '';
-      urlInput.focus();
-    });
+    if (btnClearUrl) {
+      btnClearUrl.addEventListener('click', () => {
+        urlInput.value = '';
+        urlInput.focus();
+      });
+    }
 
     const urlWrapper = document.querySelector('.url-input-wrapper');
     if (urlWrapper) {
@@ -446,13 +646,16 @@
       });
     }
 
-    btnStop.addEventListener('click', async () => {
-      if (window.electronAPI) {
-        await window.electronAPI.stopAudit();
-      }
-      setAuditingState(false);
-      statusMessage.textContent = 'Auditoria interrompida pelo usuário.';
-    });
+    if (btnStop) {
+      btnStop.addEventListener('click', async () => {
+        if (window.electronAPI) {
+          await window.electronAPI.stopAudit();
+        }
+        setAuditingState(false);
+        statusMessage.textContent = 'Audit stopped by user.';
+        saveCurrentAuditToHistory('stopped');
+      });
+    }
 
     if (btnRetry) {
       btnRetry.addEventListener('click', () => {
@@ -466,7 +669,7 @@
     document.querySelectorAll('.preset-tag').forEach(tag => {
       tag.addEventListener('click', () => {
         const url = tag.getAttribute('data-url');
-        urlInput.value = url;
+        if (urlInput) urlInput.value = url;
         triggerAudit(url);
       });
     });
@@ -477,65 +680,176 @@
   /* -------------------------------------------------------------------------- */
   function setScore(score) {
     if (score === null || score === undefined || isNaN(score)) {
-      scoreValueEl.textContent = '--';
-      scoreBadgeEl.textContent = 'Sem dados';
-      scoreBadgeEl.className = 'score-status-badge';
-      scoreCircleEl.style.strokeDashoffset = 314;
-      scoreCircleEl.style.stroke = 'var(--text-muted)';
+      currentOverallScore = null;
+      if (scoreValueEl) scoreValueEl.textContent = '--';
+      if (scoreBadgeEl) {
+        scoreBadgeEl.textContent = 'No data';
+        scoreBadgeEl.className = 'score-status-badge';
+      }
+      if (scoreCircleEl) {
+        scoreCircleEl.style.strokeDashoffset = '314';
+        scoreCircleEl.style.stroke = 'var(--text-muted)';
+      }
       return;
     }
 
-    scoreValueEl.textContent = score;
-    const circumference = 314;
-    const offset = circumference - (score / 100) * circumference;
-    scoreCircleEl.style.strokeDashoffset = offset;
+    const val = Math.max(0, Math.min(100, Math.round(score)));
+    currentOverallScore = val;
+    if (scoreValueEl) scoreValueEl.textContent = val;
 
-    if (score >= 90) {
-      scoreCircleEl.style.stroke = 'var(--color-good)';
-      scoreBadgeEl.textContent = 'Excelente';
-      scoreBadgeEl.className = 'score-status-badge good';
-    } else if (score >= 50) {
-      scoreCircleEl.style.stroke = 'var(--color-warn)';
-      scoreBadgeEl.textContent = 'Precisa Melhorar';
-      scoreBadgeEl.className = 'score-status-badge needs-improvement';
-    } else {
-      scoreCircleEl.style.stroke = 'var(--color-poor)';
-      scoreBadgeEl.textContent = 'Crítico';
-      scoreBadgeEl.className = 'score-status-badge poor';
+    const circumference = 314;
+    const offset = circumference - (val / 100) * circumference;
+    if (scoreCircleEl) scoreCircleEl.style.strokeDashoffset = offset;
+
+    let color = 'var(--color-good)';
+    let badgeText = 'Good';
+    let badgeClass = 'good';
+
+    if (val < 50) {
+      color = 'var(--color-poor)';
+      badgeText = 'Poor';
+      badgeClass = 'poor';
+    } else if (val < 90) {
+      color = 'var(--color-warn)';
+      badgeText = 'Needs Work';
+      badgeClass = 'needs-improvement';
+    }
+
+    if (scoreCircleEl) scoreCircleEl.style.stroke = color;
+    if (scoreBadgeEl) {
+      scoreBadgeEl.textContent = badgeText;
+      scoreBadgeEl.className = `score-status-badge ${badgeClass}`;
     }
   }
 
-  function setVital(name, evaluated) {
-    const valMap = { LCP: valLCPEl, FCP: valFCPEl, CLS: valCLSEl, TTFB: valTTFBEl };
-    const badgeMap = { LCP: badgeLCPEl, FCP: badgeFCPEl, CLS: badgeCLSEl, TTFB: badgeTTFBEl };
+  function setVital(name, evalData) {
+    if (!evalData) return;
+    const { value, rating } = evalData;
+    if (currentMetrics[name] !== undefined) {
+      currentMetrics[name] = value;
+    }
 
-    const elVal = valMap[name];
-    const elBadge = badgeMap[name];
-    if (!elVal || !elBadge) return;
+    let valEl, badgeEl, unit;
+    if (name === 'LCP') {
+      valEl = valLCPEl; badgeEl = badgeLCPEl; unit = 'ms';
+    } else if (name === 'FCP') {
+      valEl = valFCPEl; badgeEl = badgeFCPEl; unit = 'ms';
+    } else if (name === 'CLS') {
+      valEl = valCLSEl; badgeEl = badgeCLSEl; unit = '';
+    } else if (name === 'TTFB') {
+      valEl = valTTFBEl; badgeEl = badgeTTFBEl; unit = 'ms';
+    }
 
-    if (!evaluated || evaluated.value === null) {
-      elVal.textContent = '--';
-      elBadge.textContent = '--';
-      elBadge.className = 'metric-badge';
+    if (!valEl || !badgeEl) return;
+
+    if (value === null || value === undefined) {
+      valEl.textContent = '--';
+      badgeEl.textContent = '--';
+      badgeEl.className = 'metric-badge';
       return;
     }
 
-    let displayVal = evaluated.value;
+    let displayVal = value;
     if (name === 'CLS') {
-      displayVal = evaluated.value.toFixed(3);
-    } else if (evaluated.value >= 1000) {
-      displayVal = (evaluated.value / 1000).toFixed(2) + ' s';
+      displayVal = Number(value).toFixed(3);
     } else {
-      displayVal = Math.round(evaluated.value);
+      displayVal = Math.round(value);
     }
 
-    elVal.textContent = displayVal;
-    elBadge.textContent = evaluated.label;
-    elBadge.className = `metric-badge ${evaluated.rating}`;
+    valEl.textContent = displayVal;
+
+    let textRating = 'Good';
+    if (rating === 'poor') {
+      textRating = 'Poor';
+    } else if (rating === 'needs-improvement') {
+      textRating = 'Needs Work';
+    }
+
+    badgeEl.textContent = textRating;
+    badgeEl.className = `metric-badge ${rating || ''}`;
+  }
+
+  function resetVitals() {
+    ['LCP', 'FCP', 'CLS', 'TTFB'].forEach(metric => {
+      setVital(metric, { value: null, rating: '' });
+    });
+  }
+
+  function updateThroughputComparison() {
+    if (!summaryEffectiveThroughput) return;
+    if (lastTotalBytes > 0 && lastLoadTimeMs > 0) {
+      const loadTimeSec = lastLoadTimeMs / 1000;
+      const effectiveMbps = ((lastTotalBytes * 8) / (loadTimeSec * 1000000));
+      const displayMbps = effectiveMbps.toFixed(2);
+      summaryEffectiveThroughput.textContent = `${displayMbps} Mbps`;
+
+      if (clientSpeedMbps > 0) {
+        const pct = Math.min(100, Math.round((effectiveMbps / clientSpeedMbps) * 100));
+        summaryEffectiveThroughput.title = `Site utilized ~${pct}% of tester bandwidth (${clientSpeedMbps.toFixed(1)} Mbps)`;
+      }
+    } else {
+      summaryEffectiveThroughput.textContent = '-- Mbps';
+    }
+  }
+
+  async function runClientSpeedProbe() {
+    if (!window.electronAPI || !window.electronAPI.probeSpeed) return;
+    if (btnProbeSpeed) {
+      btnProbeSpeed.disabled = true;
+      btnProbeSpeed.textContent = 'Testing...';
+    }
+    if (labelClientDiag) labelClientDiag.textContent = 'Testing speed...';
+
+    try {
+      const res = await window.electronAPI.probeSpeed();
+      if (res && res.ok) {
+        clientSpeedMbps = res.downloadMbps;
+        clientPingMs = res.pingMs;
+
+        if (valClientSpeed) valClientSpeed.textContent = res.downloadMbps.toFixed(1);
+        if (labelClientPing) labelClientPing.textContent = `Ping: ${res.pingMs} ms`;
+        if (labelClientDiag) {
+          if (res.downloadMbps > 50) {
+            labelClientDiag.textContent = 'Fast Connection';
+          } else if (res.downloadMbps > 15) {
+            labelClientDiag.textContent = 'Average Connection';
+          } else {
+            labelClientDiag.textContent = 'Slow Connection';
+          }
+        }
+        showToast(`Tester Bandwidth: ${res.downloadMbps} Mbps (Ping: ${res.pingMs} ms)`, 'success', 3000);
+        updateThroughputComparison();
+      } else {
+        if (labelClientDiag) labelClientDiag.textContent = 'Test Failed';
+        showToast('Unable to test local connection speed.', 'warning', 3000);
+      }
+    } catch (e) {
+      if (labelClientDiag) labelClientDiag.textContent = 'Probe Error';
+    } finally {
+      if (btnProbeSpeed) {
+        btnProbeSpeed.disabled = false;
+        btnProbeSpeed.textContent = 'Run Test';
+      }
+    }
+  }
+
+  function updateStats(stats) {
+    if (!stats) return;
+    lastStats = stats;
+
+    if (summaryTotalReqs) summaryTotalReqs.textContent = stats.totalRequests || 0;
+    if (summaryTotalBytes) summaryTotalBytes.textContent = formatBytes(stats.totalBytes || 0);
+    if (summaryFailedReqs) summaryFailedReqs.textContent = stats.failedRequests || 0;
+    if (reqCounter) reqCounter.textContent = `${stats.totalRequests || 0} requests captured`;
+
+    if (typeof stats.totalBytes === 'number' && stats.totalBytes > 0) {
+      lastTotalBytes = stats.totalBytes;
+      updateThroughputComparison();
+    }
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Real-time Network Table Rendering (Buffered & Capped)                      */
+  /* RAF Batching for Request Table                                             */
   /* -------------------------------------------------------------------------- */
   function scheduleBatchUpdate(req) {
     if (!req || !req.id) return;
@@ -552,31 +866,74 @@
     const batch = Array.from(pendingUpdates.values());
     pendingUpdates.clear();
 
-    for (const req of batch) {
-      updateOrInsertRow(req);
+    if (batch.length === 0) return;
+
+    if (emptyStateRow && !emptyStateRow.classList.contains('hidden')) {
+      emptyStateRow.classList.add('hidden');
+    }
+
+    const counts = { all: 0, api: 0, fetch: 0, script: 0, stylesheet: 0, image: 0, font: 0, document: 0 };
+
+    for (let i = 0; i < batch.length; i++) {
+      const req = batch[i];
+      upsertRequestRow(req);
+    }
+
+    // Refresh Category Counts
+    for (const entry of requestsMap.values()) {
+      const cat = entry.req.category;
+      counts.all++;
+      if (entry.req.isApi) counts.api++;
+      if (cat === 'fetch') counts.fetch++;
+      else if (cat === 'script') counts.script++;
+      else if (cat === 'stylesheet') counts.stylesheet++;
+      else if (cat === 'image') counts.image++;
+      else if (cat === 'font') counts.font++;
+      else if (cat === 'document') counts.document++;
+    }
+
+    Object.keys(counts).forEach(k => {
+      if (countEls[k]) countEls[k].textContent = counts[k];
+    });
+
+    applyFilter();
+  }
+
+  function trackApiOrigin(origin) {
+    if (!origin || !apiOriginSelect) return;
+    const isNew = !detectedApiOrigins.has(origin);
+    const count = (detectedApiOrigins.get(origin) || 0) + 1;
+    detectedApiOrigins.set(origin, count);
+
+    if (isNew) {
+      apiOriginSelect.classList.remove('hidden');
+      const opt = document.createElement('option');
+      opt.value = origin;
+      opt.textContent = `${origin} (${count})`;
+      apiOriginSelect.appendChild(opt);
+    } else {
+      const opt = apiOriginSelect.querySelector(`option[value="${CSS.escape(origin)}"]`);
+      if (opt) {
+        opt.textContent = `${origin} (${count})`;
+      }
     }
   }
 
-  function sanitizeClass(str) {
-    return String(str || 'other').replace(/[^a-zA-Z0-9_-]/g, '');
+  function trackHttpStatus(code) {
+    if (!code || !statusFilterSelect) return;
+    const numericCode = Number(code);
+    if (!numericCode || detectedStatusCodes.has(numericCode)) return;
+    detectedStatusCodes.add(numericCode);
   }
 
-  function updateOrInsertRow(req) {
+  function upsertRequestRow(req) {
     let entry = requestsMap.get(req.id);
 
     if (!entry) {
-      if (emptyStateRow && emptyStateRow.parentNode) {
-        emptyStateRow.remove();
-      }
-
-      // Enforce max DOM rows to protect performance
       if (orderedRowIds.length >= MAX_DOM_ROWS) {
         const oldestId = orderedRowIds.shift();
         const oldEntry = requestsMap.get(oldestId);
-        if (oldEntry && oldEntry.rowEl && oldEntry.rowEl.parentNode) {
-          if (selectedRowEl === oldEntry.rowEl) {
-            closeDrawer();
-          }
+        if (oldEntry && oldEntry.rowEl) {
           oldEntry.rowEl.remove();
         }
         requestsMap.delete(oldestId);
@@ -645,498 +1002,363 @@
     // Status Code
     const statusCell = row.querySelector('.cell-status');
     if (req.status === 'failed') {
-      statusCell.innerHTML = `<span class="status-pill status-failed" title="${escapeHtml(req.errorText || 'Failed')}">Falha</span>`;
+      statusCell.innerHTML = `<span class="status-pill status-failed" title="${escapeHtml(req.errorText || 'Failed')}">Failed</span>`;
     } else if (req.statusCode) {
       const codeGroup = `${Math.floor(req.statusCode / 100)}xx`;
-      statusCell.innerHTML = `<span class="status-pill status-${codeGroup}">${req.statusCode}</span>`;
+      statusCell.innerHTML = `<span class="status-pill status-${codeGroup}">${escapeHtml(req.statusCode)}</span>`;
     } else {
-      statusCell.innerHTML = `<span class="status-pill status-pending">Pendente</span>`;
+      statusCell.innerHTML = `<span class="status-pill status-pending">...</span>`;
     }
 
     // Type
     const typeCell = row.querySelector('.cell-type');
     if (req.isApi) {
-      typeCell.innerHTML = `<span class="type-pill api" title="Requisição de API">API</span><span class="api-tag">${escapeHtml(req.category)}</span>`;
+      typeCell.innerHTML = `<span class="type-pill api" title="API: ${escapeHtml(req.apiOrigin || '')}">API</span>`;
     } else {
       typeCell.innerHTML = `<span class="type-pill ${safeCat}">${escapeHtml(req.category)}</span>`;
     }
 
     // Size
     const sizeCell = row.querySelector('.cell-size');
-    if (req.encodedDataLength > 0) {
-      sizeCell.textContent = formatBytes(req.encodedDataLength);
-    }
+    const bytes = req.encodedDataLength || req.bodySize || 0;
+    sizeCell.textContent = bytes > 0 ? formatBytes(bytes) : '--';
 
     // Duration & Timeline
     const timeCell = row.querySelector('.cell-time');
-    const timelineBar = row.querySelector('.timeline-bar');
-    if (req.durationMs > 0) {
-      timeCell.textContent = formatDuration(req.durationMs);
-      if (req.durationMs > maxDurationSeen) maxDurationSeen = req.durationMs;
-      const pct = Math.min(100, Math.max(8, (req.durationMs / maxDurationSeen) * 100));
-      timelineBar.style.width = `${pct}%`;
-    }
+    const barEl = row.querySelector('.timeline-bar');
 
-    applyFilterToRow(row);
-  }
-
-  function trackApiOrigin(origin) {
-    if (!origin || !apiOriginSelect) return;
-    const prev = detectedApiOrigins.get(origin) || 0;
-    detectedApiOrigins.set(origin, prev + 1);
-    rebuildApiOriginDropdown();
-  }
-
-  function rebuildApiOriginDropdown() {
-    if (!apiOriginSelect) return;
-    if (detectedApiOrigins.size === 0) {
-      apiOriginSelect.classList.add('hidden');
-      return;
-    }
-    apiOriginSelect.classList.remove('hidden');
-
-    const selected = currentApiOrigin;
-    apiOriginSelect.innerHTML = '';
-
-    let totalApi = 0;
-    detectedApiOrigins.forEach(c => { totalApi += c; });
-
-    const allOpt = document.createElement('option');
-    allOpt.value = 'all';
-    allOpt.textContent = `⚡ Todas as APIs (${totalApi})`;
-    if (selected === 'all') allOpt.selected = true;
-    apiOriginSelect.appendChild(allOpt);
-
-    for (const [origin, count] of detectedApiOrigins.entries()) {
-      const opt = document.createElement('option');
-      opt.value = origin;
-      opt.textContent = `${origin} (${count})`;
-      if (origin === selected) opt.selected = true;
-      apiOriginSelect.appendChild(opt);
-    }
-  }
-
-  function trackHttpStatus(code) {
-    if (!code || !statusFilterSelect) return;
-    const num = Number(code);
-    if (isNaN(num) || num <= 0) return;
-    if (!detectedStatusCodes.has(num)) {
-      detectedStatusCodes.add(num);
-      rebuildStatusFilterDropdown();
-    }
-  }
-
-  function getStatusDescription(code) {
-    const map = {
-      200: 'OK', 201: 'Created', 204: 'No Content', 206: 'Partial Content',
-      301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified', 307: 'Temp Redirect', 308: 'Perm Redirect',
-      400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed',
-      429: 'Too Many Requests', 500: 'Internal Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout'
-    };
-    return map[code] || '';
-  }
-
-  function rebuildStatusFilterDropdown() {
-    if (!statusFilterSelect) return;
-    let optGroup = statusFilterSelect.querySelector('optgroup[data-dynamic="true"]');
-    if (!optGroup && detectedStatusCodes.size > 0) {
-      optGroup = document.createElement('optgroup');
-      optGroup.label = 'Códigos Detectados';
-      optGroup.dataset.dynamic = 'true';
-      statusFilterSelect.appendChild(optGroup);
-    }
-    if (optGroup) {
-      optGroup.innerHTML = '';
-      const sorted = Array.from(detectedStatusCodes).sort((a, b) => a - b);
-      sorted.forEach(code => {
-        const opt = document.createElement('option');
-        opt.value = String(code);
-        const desc = getStatusDescription(code);
-        opt.textContent = desc ? `${code} (${desc})` : String(code);
-        if (String(code) === currentHttpStatus) opt.selected = true;
-        optGroup.appendChild(opt);
-      });
-    }
-  }
-
-  function updateThroughputComparison() {
-    if (!summaryEffectiveThroughput) return;
-    if (lastTotalBytes > 0 && lastLoadTimeMs > 0) {
-      const loadTimeSec = lastLoadTimeMs / 1000;
-      const effectiveMbps = ((lastTotalBytes * 8) / (loadTimeSec * 1000000));
-      const displayMbps = effectiveMbps.toFixed(2);
-      summaryEffectiveThroughput.textContent = `${displayMbps} Mbps`;
-
-      if (clientSpeedMbps > 0) {
-        const pct = Math.min(100, Math.round((effectiveMbps / clientSpeedMbps) * 100));
-        summaryEffectiveThroughput.title = `Site utilizou ~${pct}% da sua banda local medida (${clientSpeedMbps.toFixed(1)} Mbps)`;
-      }
+    if (req.duration && req.duration > 0) {
+      timeCell.textContent = formatDuration(req.duration);
+      if (req.duration > maxDurationSeen) maxDurationSeen = req.duration;
+      const pct = Math.min(100, Math.max(5, (req.duration / maxDurationSeen) * 100));
+      barEl.style.width = `${pct}%`;
     } else {
-      summaryEffectiveThroughput.textContent = '-- Mbps';
-    }
-  }
-
-  async function runClientSpeedProbe() {
-    if (!window.electronAPI || !window.electronAPI.probeSpeed) return;
-    if (btnProbeSpeed) {
-      btnProbeSpeed.disabled = true;
-      btnProbeSpeed.textContent = '⏳ Medindo...';
-    }
-    if (labelClientDiag) labelClientDiag.textContent = 'Testando banda...';
-
-    try {
-      const res = await window.electronAPI.probeSpeed();
-      if (res && res.ok) {
-        clientSpeedMbps = res.downloadMbps;
-        clientPingMs = res.pingMs;
-
-        if (valClientSpeed) valClientSpeed.textContent = res.downloadMbps.toFixed(1);
-        if (labelClientPing) labelClientPing.textContent = `Ping: ${res.pingMs} ms`;
-        if (labelClientDiag) {
-          if (res.downloadMbps > 50) {
-            labelClientDiag.textContent = '🟢 Conexão Rápida';
-          } else if (res.downloadMbps > 15) {
-            labelClientDiag.textContent = '🟡 Conexão Normal';
-          } else {
-            labelClientDiag.textContent = '🔴 Conexão Lenta';
-          }
-        }
-        showToast(`Banda local medida: ${res.downloadMbps} Mbps (Ping: ${res.pingMs} ms)`, 'success', 3000);
-        updateThroughputComparison();
-      } else {
-        if (labelClientDiag) labelClientDiag.textContent = 'Falha ao medir';
-        showToast('Não foi possível verificar a velocidade local.', 'warning', 3000);
-      }
-    } catch (e) {
-      if (labelClientDiag) labelClientDiag.textContent = 'Erro de teste';
-    } finally {
-      if (btnProbeSpeed) {
-        btnProbeSpeed.disabled = false;
-        btnProbeSpeed.textContent = '⚡ Medir';
-      }
-    }
-  }
-
-  function updateStats(stats) {
-    if (!stats) return;
-
-    summaryTotalReqs.textContent = stats.totalRequests || 0;
-    summaryTotalBytes.textContent = formatBytes(stats.totalBytes || 0);
-    summaryFailedReqs.textContent = stats.failedRequests || 0;
-    reqCounter.textContent = `${stats.totalRequests || 0} requisições capturadas`;
-
-    if (typeof stats.totalBytes === 'number' && stats.totalBytes > 0) {
-      lastTotalBytes = stats.totalBytes;
-      updateThroughputComparison();
-    }
-
-    if (stats.typeCounts) {
-      countEls.all.textContent = stats.typeCounts.all || 0;
-      if (countEls.api) countEls.api.textContent = stats.typeCounts.api || 0;
-      countEls.fetch.textContent = stats.typeCounts.fetch || 0;
-      countEls.script.textContent = stats.typeCounts.script || 0;
-      countEls.stylesheet.textContent = stats.typeCounts.stylesheet || 0;
-      countEls.image.textContent = stats.typeCounts.image || 0;
-      countEls.font.textContent = stats.typeCounts.font || 0;
-      countEls.document.textContent = stats.typeCounts.document || 0;
+      timeCell.textContent = '--';
+      barEl.style.width = '8%';
     }
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Filtering and Searching                                                    */
+  /* Filtering & Search                                                         */
   /* -------------------------------------------------------------------------- */
-  function applyFilterToRow(row) {
-    if (!row) return;
-    const category = row.dataset.category;
-    const url = row.dataset.url || '';
-    const method = row.dataset.method || '';
-    const isApi = row.dataset.isApi === 'true';
-    const apiOrigin = row.dataset.apiOrigin || '';
-    const statusCode = Number(row.dataset.statusCode) || 0;
-    const reqStatus = row.dataset.status || '';
-
-    let matchesFilter = true;
-    if (currentFilter === 'all') {
-      matchesFilter = true;
-    } else if (currentFilter === 'api') {
-      matchesFilter = isApi;
-    } else {
-      matchesFilter = (category === currentFilter);
-    }
-
-    let matchesApiOrigin = true;
-    if (currentApiOrigin !== 'all') {
-      matchesApiOrigin = (isApi && apiOrigin === currentApiOrigin);
-    }
-
-    let matchesHttpStatus = true;
-    if (currentHttpStatus !== 'all') {
-      if (currentHttpStatus === '2xx') {
-        matchesHttpStatus = (statusCode >= 200 && statusCode < 300);
-      } else if (currentHttpStatus === '3xx') {
-        matchesHttpStatus = (statusCode >= 300 && statusCode < 400);
-      } else if (currentHttpStatus === '4xx') {
-        matchesHttpStatus = (statusCode >= 400 && statusCode < 500);
-      } else if (currentHttpStatus === '5xx') {
-        matchesHttpStatus = (statusCode >= 500 && statusCode < 600);
-      } else if (currentHttpStatus === 'error') {
-        matchesHttpStatus = (statusCode >= 400 || reqStatus === 'failed');
-      } else if (currentHttpStatus === 'pending') {
-        matchesHttpStatus = (reqStatus === 'pending' || (!statusCode && reqStatus !== 'failed'));
-      } else if (!isNaN(Number(currentHttpStatus))) {
-        matchesHttpStatus = (statusCode === Number(currentHttpStatus));
-      }
-    }
-
-    let matchesSearch = true;
-    if (currentSearch) {
-      if (currentSearch === 'api' || currentSearch === 'api:') {
-        matchesSearch = isApi;
-      } else {
-        const statusPrefixMatch = currentSearch.match(/^status(?:-code)?:([a-z0-9]+)$/);
-        if (statusPrefixMatch) {
-          const targetStatus = statusPrefixMatch[1];
-          if (targetStatus === '2xx') {
-            matchesSearch = (statusCode >= 200 && statusCode < 300);
-          } else if (targetStatus === '3xx') {
-            matchesSearch = (statusCode >= 300 && statusCode < 400);
-          } else if (targetStatus === '4xx') {
-            matchesSearch = (statusCode >= 400 && statusCode < 500);
-          } else if (targetStatus === '5xx') {
-            matchesSearch = (statusCode >= 500 && statusCode < 600);
-          } else if (targetStatus === 'error') {
-            matchesSearch = (statusCode >= 400 || reqStatus === 'failed');
-          } else if (!isNaN(Number(targetStatus))) {
-            matchesSearch = (statusCode === Number(targetStatus));
-          } else {
-            matchesSearch = false;
-          }
-        } else {
-          const codeStr = String(row.dataset.statusCode || '');
-          matchesSearch = url.includes(currentSearch) ||
-                          method.includes(currentSearch) ||
-                          apiOrigin.toLowerCase().includes(currentSearch) ||
-                          codeStr === currentSearch;
-        }
-      }
-    }
-
-    if (matchesFilter && matchesApiOrigin && matchesHttpStatus && matchesSearch) {
-      row.classList.remove('hidden');
-    } else {
-      row.classList.add('hidden');
-    }
-  }
-
-  function applyFiltersAll() {
-    requestsMap.forEach(entry => applyFilterToRow(entry.rowEl));
-  }
-
   function setupFilters() {
-    filterTabsContainer.addEventListener('click', (e) => {
-      const tab = e.target.closest('.filter-tab');
-      if (!tab) return;
-
-      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      currentFilter = tab.getAttribute('data-filter');
-      applyFiltersAll();
-    });
-
-    if (statusFilterSelect) {
-      statusFilterSelect.addEventListener('change', (e) => {
-        currentHttpStatus = e.target.value;
-        applyFiltersAll();
+    if (filterTabsContainer) {
+      filterTabsContainer.addEventListener('click', (e) => {
+        const tab = e.target.closest('.filter-tab');
+        if (!tab) return;
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentFilter = tab.dataset.filter || 'all';
+        applyFilter();
       });
     }
 
     if (apiOriginSelect) {
-      apiOriginSelect.addEventListener('change', (e) => {
-        currentApiOrigin = e.target.value;
-        applyFiltersAll();
+      apiOriginSelect.addEventListener('change', () => {
+        currentApiOrigin = apiOriginSelect.value;
+        applyFilter();
       });
     }
 
-    searchFilter.addEventListener('input', (e) => {
-      currentSearch = (e.target.value || '').toLowerCase().trim();
-      applyFiltersAll();
+    if (statusFilterSelect) {
+      statusFilterSelect.addEventListener('change', () => {
+        currentHttpStatus = statusFilterSelect.value;
+        applyFilter();
+      });
+    }
+
+    if (searchFilter) {
+      searchFilter.addEventListener('input', () => {
+        currentSearch = searchFilter.value.trim().toLowerCase();
+        applyFilter();
+      });
+    }
+  }
+
+  function applyFilter() {
+    let visibleCount = 0;
+    const isStatusSearch = currentSearch.startsWith('status:');
+    const statusSearchVal = isStatusSearch ? currentSearch.replace('status:', '').trim() : '';
+
+    requestsMap.forEach(({ rowEl, req }) => {
+      let matches = true;
+
+      // Category filter
+      if (currentFilter === 'api') {
+        if (!req.isApi) matches = false;
+      } else if (currentFilter !== 'all') {
+        if (req.category !== currentFilter) matches = false;
+      }
+
+      // API origin filter
+      if (matches && currentApiOrigin !== 'all') {
+        if (req.apiOrigin !== currentApiOrigin) matches = false;
+      }
+
+      // HTTP status select filter
+      if (matches && currentHttpStatus !== 'all') {
+        const code = Number(req.statusCode) || 0;
+        if (currentHttpStatus === '2xx') {
+          if (code < 200 || code >= 300) matches = false;
+        } else if (currentHttpStatus === '3xx') {
+          if (code < 300 || code >= 400) matches = false;
+        } else if (currentHttpStatus === '4xx') {
+          if (code < 400 || code >= 500) matches = false;
+        } else if (currentHttpStatus === '5xx') {
+          if (code < 500 || code >= 600) matches = false;
+        } else if (currentHttpStatus === 'error') {
+          if (code < 400 && req.status !== 'failed') matches = false;
+        } else if (currentHttpStatus === 'pending') {
+          if (req.status !== 'pending' && (code > 0 || req.status === 'failed')) matches = false;
+        } else {
+          // Specific status code
+          if (String(code) !== currentHttpStatus) matches = false;
+        }
+      }
+
+      // Search Filter
+      if (matches && currentSearch) {
+        if (isStatusSearch) {
+          if (statusSearchVal === 'error') {
+            const code = Number(req.statusCode) || 0;
+            if (code < 400 && req.status !== 'failed') matches = false;
+          } else if (statusSearchVal) {
+            const codeStr = String(req.statusCode || '');
+            if (!codeStr.startsWith(statusSearchVal)) matches = false;
+          }
+        } else {
+          const urlStr = String(req.url || '').toLowerCase();
+          const methodStr = String(req.method || '').toLowerCase();
+          const codeStr = String(req.statusCode || '');
+          if (!urlStr.includes(currentSearch) && !methodStr.includes(currentSearch) && !codeStr.includes(currentSearch)) {
+            matches = false;
+          }
+        }
+      }
+
+      if (matches) {
+        rowEl.style.display = '';
+        visibleCount++;
+      } else {
+        rowEl.style.display = 'none';
+      }
     });
-  }
 
-  /* -------------------------------------------------------------------------- */
-  /* Request Details Drawer & Inspection                                        */
-  /* -------------------------------------------------------------------------- */
-  function openDrawer(req, rowEl) {
-    if (!req) return;
-    activeRequest = req;
-
-    if (selectedRowEl) {
-      selectedRowEl.classList.remove('selected-row');
-    }
-    selectedRowEl = rowEl;
-    if (selectedRowEl) {
-      selectedRowEl.classList.add('selected-row');
-    }
-
-    renderDrawerDetails(req);
-
-    if (requestDrawer) requestDrawer.classList.remove('hidden');
-    if (drawerBackdrop) drawerBackdrop.classList.add('hidden');
-  }
-
-  function closeDrawer() {
-    activeRequest = null;
-    if (requestDrawer) requestDrawer.classList.add('hidden');
-    if (drawerBackdrop) drawerBackdrop.classList.add('hidden');
-    if (selectedRowEl) {
-      selectedRowEl.classList.remove('selected-row');
-      selectedRowEl = null;
-    }
-  }
-
-  function renderDrawerDetails(req) {
-    if (!drawerMethod || !drawerTitle || !drawerGeneralInfo) return;
-
-    const safeMethod = sanitizeClass(req.method);
-    drawerMethod.textContent = req.method;
-    drawerMethod.className = `drawer-badge method-${safeMethod}`;
-    drawerTitle.textContent = req.url || 'Requisição';
-    drawerTitle.title = req.url || '';
-
-    // General Section
-    drawerGeneralInfo.innerHTML = '';
-    const statusDisplay = req.status === 'failed'
-      ? `Falha (${req.errorText || 'Erro de rede'})`
-      : (req.statusCode ? `${req.statusCode} ${req.statusText || ''}` : 'Pendente');
-
-    const generalFields = [
-      { key: 'URL da Requisição', val: req.url },
-      { key: 'Método HTTP', val: req.method },
-      { key: 'Código de Status', val: statusDisplay },
-      { key: 'Endereço Remoto', val: req.remoteIPAddress || 'Não informado' },
-      { key: 'Protocolo', val: req.protocol || 'Desconhecido' },
-      { key: 'Tipo de Recurso', val: `${(req.category || '').toUpperCase()} (${req.type || ''})` },
-      { key: 'Chamada de API', val: req.isApi ? `Sim (${req.apiOrigin || 'Endpoint REST/GraphQL'})` : 'Não (Recurso Estático)' }
-    ];
-
-    for (const f of generalFields) {
-      const row = document.createElement('div');
-      row.className = 'drawer-info-row';
-      row.innerHTML = `<span class="drawer-info-key">${escapeHtml(f.key)}:</span><span class="drawer-info-val">${escapeHtml(String(f.val || ''))}</span>`;
-      drawerGeneralInfo.appendChild(row);
-    }
-
-    // Response Headers
-    renderHeadersList(responseHeadersTable, responseHeadersCount, req.responseHeaders);
-
-    // Request Headers
-    renderHeadersList(requestHeadersTable, requestHeadersCount, req.requestHeaders);
-
-    // Timing Tab Info
-    if (drawerTimingInfo) {
-      drawerTimingInfo.innerHTML = '';
-      const timingFields = [
-        { key: 'Duração Total', val: formatDuration(req.durationMs) },
-        { key: 'Tamanho Transferido', val: req.encodedDataLength > 0 ? formatBytes(req.encodedDataLength) : '0 B' },
-        { key: 'Tipo MIME', val: req.mimeType || 'Não especificado' },
-        { key: 'Iniciador', val: req.initiator || 'Desconhecido' },
-        { key: 'Timestamp de Início', val: req.startMonotonic > 0 ? `${req.startMonotonic.toFixed(3)}s` : '--' }
-      ];
-
-      for (const f of timingFields) {
-        const row = document.createElement('div');
-        row.className = 'drawer-info-row';
-        row.innerHTML = `<span class="drawer-info-key">${escapeHtml(f.key)}:</span><span class="drawer-info-val">${escapeHtml(String(f.val || ''))}</span>`;
-        drawerTimingInfo.appendChild(row);
+    if (emptyStateRow) {
+      if (requestsMap.size > 0 && visibleCount === 0) {
+        emptyStateRow.classList.remove('hidden');
+        emptyStateRow.querySelector('.empty-title').textContent = 'No requests match your filter';
+        emptyStateRow.querySelector('.empty-desc').textContent = 'Adjust category tabs, HTTP status, or search query.';
+      } else if (requestsMap.size === 0) {
+        emptyStateRow.classList.remove('hidden');
+        emptyStateRow.querySelector('.empty-title').textContent = 'No requests recorded yet';
+        emptyStateRow.querySelector('.empty-desc').textContent = 'Enter a target URL above and click Start Audit to monitor API calls and network waterfall in real time.';
+      } else {
+        emptyStateRow.classList.add('hidden');
       }
     }
   }
 
-  function renderHeadersList(containerEl, countEl, headersObj) {
-    if (!containerEl) return;
-    containerEl.innerHTML = '';
-    const entries = (headersObj && typeof headersObj === 'object' && !Array.isArray(headersObj)) ? Object.entries(headersObj) : [];
-    if (countEl) countEl.textContent = entries.length;
+  /* -------------------------------------------------------------------------- */
+  /* Request Drawer (Inspection Panel)                                          */
+  /* -------------------------------------------------------------------------- */
+  function openDrawer(req, rowEl) {
+    if (!req || !requestDrawer) return;
 
-    if (entries.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'empty-headers';
-      empty.textContent = 'Nenhum cabeçalho disponível para esta requisição.';
-      containerEl.appendChild(empty);
-      return;
+    if (selectedRowEl) selectedRowEl.classList.remove('selected');
+    if (rowEl) {
+      selectedRowEl = rowEl;
+      selectedRowEl.classList.add('selected');
     }
 
-    for (const [key, val] of entries) {
-      const entryEl = document.createElement('div');
-      entryEl.className = 'header-entry';
-      const keySpan = document.createElement('span');
-      keySpan.className = 'header-name';
-      keySpan.textContent = String(key) + ':';
-      const valSpan = document.createElement('span');
-      valSpan.className = 'header-val';
-      valSpan.textContent = String(val);
-      entryEl.appendChild(keySpan);
-      entryEl.appendChild(valSpan);
-      containerEl.appendChild(entryEl);
+    activeRequest = req;
+    renderDrawerDetails(req);
+    requestDrawer.classList.remove('hidden');
+  }
+
+  function closeDrawer() {
+    if (requestDrawer) requestDrawer.classList.add('hidden');
+    if (selectedRowEl) {
+      selectedRowEl.classList.remove('selected');
+      selectedRowEl = null;
     }
+    activeRequest = null;
   }
 
   function setupDrawerEvents() {
-    if (btnCloseDrawer) {
-      btnCloseDrawer.addEventListener('click', closeDrawer);
-    }
-    if (drawerBackdrop) {
-      drawerBackdrop.addEventListener('click', closeDrawer);
-    }
+    if (btnCloseDrawer) btnCloseDrawer.addEventListener('click', closeDrawer);
+
     if (btnCopyUrl) {
-      btnCopyUrl.addEventListener('click', async () => {
-        if (!activeRequest || !activeRequest.url) {
-          showToast('URL vazia ou indisponível para cópia.', 'warning', 2500);
-          return;
-        }
-        try {
-          await navigator.clipboard.writeText(activeRequest.url);
-          showToast('URL copiada para a área de transferência!', 'success', 2500);
-        } catch (e) {
-          showToast('Não foi possível copiar a URL.', 'error', 2500);
+      btnCopyUrl.addEventListener('click', () => {
+        if (activeRequest && activeRequest.url) {
+          navigator.clipboard.writeText(activeRequest.url);
+          showToast('URL copied to clipboard', 'success', 2000);
         }
       });
     }
 
-    // Drawer Tabs switching
     document.querySelectorAll('.drawer-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        const targetTab = tab.getAttribute('data-drawer-tab');
-        if (targetTab === 'headers') {
-          if (paneHeaders) paneHeaders.classList.remove('hidden');
-          if (paneTiming) paneTiming.classList.add('hidden');
-        } else {
-          if (paneHeaders) paneHeaders.classList.add('hidden');
-          if (paneTiming) paneTiming.classList.remove('hidden');
+
+        const tabName = tab.dataset.drawerTab;
+        if (tabName === 'headers') {
+          paneHeaders.classList.remove('hidden');
+          paneTiming.classList.add('hidden');
+        } else if (tabName === 'timing') {
+          paneHeaders.classList.add('hidden');
+          paneTiming.classList.remove('hidden');
         }
       });
     });
 
-    // Keyboard navigation (ESC closes modal or drawer)
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        if (loginModal && !loginModal.classList.contains('hidden')) {
-          loginModal.classList.add('hidden');
-        } else if (requestDrawer && !requestDrawer.classList.contains('hidden')) {
-          if (e.target === searchFilter || e.target === urlInput) {
-            e.target.blur();
-            return;
-          }
-          closeDrawer();
-        }
+      if (e.key === 'Escape' && requestDrawer && !requestDrawer.classList.contains('hidden')) {
+        closeDrawer();
       }
     });
   }
 
+  function renderDrawerDetails(req) {
+    if (!req) return;
+
+    // Header badge & title
+    if (drawerMethod) {
+      drawerMethod.textContent = req.method || 'GET';
+      drawerMethod.className = `drawer-badge method-${sanitizeClass(req.method)}`;
+    }
+    if (drawerTitle) {
+      drawerTitle.textContent = extractPath(req.url) || req.url;
+      drawerTitle.title = req.url;
+    }
+
+    // General Info Grid (XSS-Safe DOM construction)
+    if (drawerGeneralInfo) {
+      drawerGeneralInfo.innerHTML = '';
+      const generalPairs = [
+        ['Request URL', req.url || ''],
+        ['Request Method', req.method || 'GET'],
+        ['Status Code', req.statusCode ? `${req.statusCode} ${req.statusText || ''}` : (req.status === 'failed' ? `Failed (${req.errorText || 'Error'})` : 'Pending')],
+        ['Remote Address', req.remoteIPAddress ? `${req.remoteIPAddress}:${req.remotePort || ''}` : '--'],
+        ['Protocol', req.protocol || '--'],
+        ['Resource Type', req.category ? req.category.toUpperCase() : 'OTHER'],
+        ['API Call', req.isApi ? `Yes (${req.apiOrigin || ''})` : 'No']
+      ];
+
+      generalPairs.forEach(([key, val]) => {
+        const keyDiv = document.createElement('div');
+        keyDiv.className = 'drawer-info-key';
+        keyDiv.textContent = key;
+
+        const valDiv = document.createElement('div');
+        valDiv.className = 'drawer-info-val';
+        valDiv.textContent = val;
+
+        drawerGeneralInfo.appendChild(keyDiv);
+        drawerGeneralInfo.appendChild(valDiv);
+      });
+    }
+
+    // Response Headers
+    if (responseHeadersTable) {
+      responseHeadersTable.innerHTML = '';
+      const resHeaders = req.responseHeaders || {};
+      const resKeys = Object.keys(resHeaders);
+      if (responseHeadersCount) responseHeadersCount.textContent = resKeys.length;
+
+      if (resKeys.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.padding = '10px 12px';
+        emptyDiv.style.color = 'var(--text-muted)';
+        emptyDiv.style.fontStyle = 'italic';
+        emptyDiv.textContent = 'No response headers available.';
+        responseHeadersTable.appendChild(emptyDiv);
+      } else {
+        resKeys.sort().forEach(k => {
+          const row = document.createElement('div');
+          row.className = 'header-row';
+
+          const kSpan = document.createElement('span');
+          kSpan.className = 'header-key';
+          kSpan.textContent = k;
+
+          const vSpan = document.createElement('span');
+          vSpan.className = 'header-val';
+          vSpan.textContent = resHeaders[k];
+
+          row.appendChild(kSpan);
+          row.appendChild(vSpan);
+          responseHeadersTable.appendChild(row);
+        });
+      }
+    }
+
+    // Request Headers
+    if (requestHeadersTable) {
+      requestHeadersTable.innerHTML = '';
+      const reqHeaders = req.requestHeaders || {};
+      const reqKeys = Object.keys(reqHeaders);
+      if (requestHeadersCount) requestHeadersCount.textContent = reqKeys.length;
+
+      if (reqKeys.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.padding = '10px 12px';
+        emptyDiv.style.color = 'var(--text-muted)';
+        emptyDiv.style.fontStyle = 'italic';
+        emptyDiv.textContent = 'No request headers available.';
+        requestHeadersTable.appendChild(emptyDiv);
+      } else {
+        reqKeys.sort().forEach(k => {
+          const row = document.createElement('div');
+          row.className = 'header-row';
+
+          const kSpan = document.createElement('span');
+          kSpan.className = 'header-key';
+          kSpan.textContent = k;
+
+          const vSpan = document.createElement('span');
+          vSpan.className = 'header-val';
+          vSpan.textContent = reqHeaders[k];
+
+          row.appendChild(kSpan);
+          row.appendChild(vSpan);
+          requestHeadersTable.appendChild(row);
+        });
+      }
+    }
+
+    // Timing & Connection
+    if (drawerTimingInfo) {
+      drawerTimingInfo.innerHTML = '';
+      const timing = req.timing || {};
+      const timingPairs = [
+        ['Total Duration', req.duration ? formatDuration(req.duration) : '--'],
+        ['Encoded Data', req.encodedDataLength ? formatBytes(req.encodedDataLength) : '--'],
+        ['Decoded Body', req.dataLength ? formatBytes(req.dataLength) : '--'],
+        ['DNS Lookup', timing.dnsEnd && timing.dnsStart ? `${Math.round(timing.dnsEnd - timing.dnsStart)} ms` : '--'],
+        ['Initial Connection', timing.connectEnd && timing.connectStart ? `${Math.round(timing.connectEnd - timing.connectStart)} ms` : '--'],
+        ['SSL Handshake', timing.sslEnd && timing.sslStart ? `${Math.round(timing.sslEnd - timing.sslStart)} ms` : '--'],
+        ['TTFB (Waiting for server)', timing.receiveHeadersEnd && timing.sendEnd ? `${Math.round(timing.receiveHeadersEnd - timing.sendEnd)} ms` : '--']
+      ];
+
+      timingPairs.forEach(([key, val]) => {
+        const keyDiv = document.createElement('div');
+        keyDiv.className = 'drawer-info-key';
+        keyDiv.textContent = key;
+
+        const valDiv = document.createElement('div');
+        valDiv.className = 'drawer-info-val';
+        valDiv.textContent = val;
+
+        drawerTimingInfo.appendChild(keyDiv);
+        drawerTimingInfo.appendChild(valDiv);
+      });
+    }
+  }
+
   /* -------------------------------------------------------------------------- */
-  /* Electron IPC Listeners                                                     */
+  /* IPC Event Handlers                                                         */
   /* -------------------------------------------------------------------------- */
   function setupIpcListeners() {
     if (!window.electronAPI) return;
@@ -1159,6 +1381,8 @@
           lastLoadTimeMs = data.totalLoadTime;
           updateThroughputComparison();
         }
+        showToast('Audit completed successfully', 'success', 3000);
+        saveCurrentAuditToHistory('completed');
       } else if (data.status === 'failed' || data.status === 'stopped') {
         const isFail = data.status === 'failed';
         setAuditingState(false, isFail);
@@ -1167,9 +1391,10 @@
           if (statusDot) statusDot.className = 'status-indicator-dot error';
           if (btnRetry) btnRetry.classList.remove('hidden');
           const codeInfo = data.errorCode ? ` (${data.errorCode})` : '';
-          const errMsg = data.errorDescription || data.message || 'Falha de conexão';
-          statusMessage.textContent = `Falha no carregamento: ${errMsg}${codeInfo}`;
-          showToast(`Falha de conexão: ${errMsg}${codeInfo}`, 'error');
+          const errMsg = data.errorDescription || data.message || 'Connection failed';
+          statusMessage.textContent = `Load failed: ${errMsg}${codeInfo}`;
+          showToast(`Connection failed: ${errMsg}${codeInfo}`, 'error');
+          saveCurrentAuditToHistory('failed', `${errMsg}${codeInfo}`);
         }
       }
     });
@@ -1212,12 +1437,13 @@
 
     window.electronAPI.onError((err) => {
       setAuditingState(false, true);
-      const msg = err ? (err.message || String(err)) : 'Erro desconhecido';
-      statusMessage.textContent = `Erro: ${msg}`;
+      const msg = err ? (err.message || String(err)) : 'Unknown error';
+      statusMessage.textContent = `Error: ${msg}`;
       auditStatusBanner.classList.add('banner-error');
       if (statusDot) statusDot.className = 'status-indicator-dot error';
       if (btnRetry) btnRetry.classList.remove('hidden');
-      showToast(`Erro na auditoria: ${msg}`, 'error');
+      showToast(`Audit error: ${msg}`, 'error');
+      saveCurrentAuditToHistory('failed', msg);
     });
   }
 
@@ -1256,6 +1482,11 @@
     return `${(ms / 1000).toFixed(2)} s`;
   }
 
+  function sanitizeClass(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[^a-zA-Z0-9-_]/g, '');
+  }
+
   function escapeHtml(str) {
     if (typeof str !== 'string') return String(str || '');
     return str
@@ -1270,11 +1501,10 @@
   /* Initialization                                                             */
   /* -------------------------------------------------------------------------- */
   function init() {
-    loadUserSession();
-    setupAuthEvents();
     setupAuditControls();
     setupFilters();
     setupDrawerEvents();
+    setupHistoryEvents();
     setupIpcListeners();
 
     if (btnProbeSpeed) {
@@ -1282,6 +1512,9 @@
     }
     // Auto probe client speed shortly after start
     setTimeout(runClientSpeedProbe, 1200);
+
+    // Initial load of audit history
+    loadAuditHistory();
   }
 
   if (document.readyState === 'loading') {

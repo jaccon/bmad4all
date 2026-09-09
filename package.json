@@ -21,5 +21,8 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^30.0.0"
+  },
+  "dependencies": {
+    "sql.js": "^1.14.2"
   }
 }

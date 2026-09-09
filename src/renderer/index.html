@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,7 +17,6 @@
   <!-- Header -->
   <header class="app-header">
     <div class="header-brand">
-      <div class="brand-icon">⚡</div>
       <div class="brand-text">
         <h1>PageSpeed <span class="accent-text">& Network</span></h1>
         <span class="badge-version">v1.0 • Desktop</span>
@@ -25,21 +24,18 @@
     </div>
 
     <div class="header-center">
-      <div class="live-clock-card" id="clockCard" title="Horário do Sistema">
-        <span class="clock-icon">🕒</span>
+      <div class="live-clock-card" id="clockCard" title="System Time">
         <span class="clock-time" id="clockTime">--:--:--</span>
         <span class="clock-date" id="clockDate">--/--/----</span>
       </div>
     </div>
 
     <div class="header-actions">
-      <!-- User Profile / Login Widget -->
-      <div class="user-session-widget" id="userWidget">
-        <button class="btn btn-secondary btn-sm" id="btnLogin">
-          <span class="btn-icon">👤</span>
-          <span id="userLabel">Entrar</span>
-        </button>
-      </div>
+      <!-- Audit History Action Link/Button -->
+      <button class="btn btn-secondary btn-sm header-history-btn" id="btnOpenHistory" title="Audit Execution History (SQLite)">
+        <span class="history-label">History</span>
+        <span class="history-count-badge" id="historyCountBadge">0</span>
+      </button>
     </div>
   </header>
 
@@ -49,46 +45,44 @@
     <section class="url-control-section">
       <form id="auditForm" class="url-form">
         <div class="url-input-wrapper">
-          <span class="input-icon">🌐</span>
+          <span class="input-icon-label">URL</span>
           <input 
             type="text" 
             id="urlInput" 
             class="url-input" 
-            placeholder="Insira a URL para analisar (Ex: pagespeed.web.dev ou https://github.com)" 
+            placeholder="Enter URL to audit (e.g. pagespeed.web.dev or https://github.com)" 
             autocomplete="off"
             spellcheck="false"
             required
           />
-          <button type="button" class="btn-clear" id="btnClearUrl" title="Limpar URL">✕</button>
+          <button type="button" class="btn-clear" id="btnClearUrl" title="Clear URL">✕</button>
         </div>
 
         <!-- Traffic Shaping / Throttling Selector -->
-        <div class="throttling-wrapper" title="Emulação de Rede / Traffic Shaping via Chrome DevTools Protocol">
-          <span class="throttling-icon">📶</span>
-          <select id="selectThrottling" class="throttling-select" title="Simular condições de rede (Traffic Shaping)">
-            <option value="none">Banda Real (Sem Limitação)</option>
+        <div class="throttling-wrapper" title="Network Traffic Shaping via Chrome DevTools Protocol">
+          <span class="throttling-prefix">PROFILE:</span>
+          <select id="selectThrottling" class="throttling-select" title="Simulate network conditions (Traffic Shaping)">
+            <option value="none">Full Bandwidth (No Throttling)</option>
             <option value="fast-4g">Fast 4G / LTE (25M / 20ms)</option>
             <option value="slow-4g">Slow 4G (4M / 100ms)</option>
             <option value="fast-3g">Fast 3G (1.6M / 150ms)</option>
             <option value="slow-3g">Slow 3G (400K / 400ms)</option>
-            <option value="broadband-50">Cabo / Wi-Fi (50M / 10ms)</option>
+            <option value="broadband-50">Broadband / Cable (50M / 10ms)</option>
           </select>
         </div>
 
         <button type="submit" class="btn btn-primary" id="btnAudit">
-          <span class="btn-icon" id="auditBtnIcon">🚀</span>
-          <span id="auditBtnText">Analisar Site</span>
+          <span id="auditBtnText">Start Audit</span>
         </button>
 
         <button type="button" class="btn btn-danger hidden" id="btnStop">
-          <span class="btn-icon">⏹</span>
-          <span>Interromper</span>
+          <span>Stop</span>
         </button>
       </form>
 
       <!-- Quick Presets -->
       <div class="preset-links">
-        <span class="preset-label">Exemplos rápidos:</span>
+        <span class="preset-label">Quick presets:</span>
         <button class="preset-tag" data-url="https://pagespeed.web.dev">pagespeed.web.dev</button>
         <button class="preset-tag" data-url="https://github.com">github.com</button>
         <button class="preset-tag" data-url="https://wikipedia.org">wikipedia.org</button>
@@ -98,8 +92,8 @@
       <!-- Live Audit Status Banner -->
       <div class="audit-status-banner hidden" id="auditStatusBanner">
         <div class="status-indicator-dot pulse" id="statusDot"></div>
-        <span class="status-message" id="statusMessage">Pronto para iniciar auditoria</span>
-        <button type="button" class="btn btn-secondary btn-sm hidden" id="btnRetry">🔄 Tentar Novamente</button>
+        <span class="status-message" id="statusMessage">Ready to start audit</span>
+        <button type="button" class="btn btn-secondary btn-sm hidden" id="btnRetry">Retry</button>
         <div class="progress-bar-container" id="progressBarContainer">
           <div class="progress-bar-fill" id="progressBar"></div>
         </div>
@@ -110,11 +104,11 @@
     <section class="vitals-panel">
       <div class="panel-header">
         <div class="panel-title-group">
-          <h2>📊 Desempenho & Core Web Vitals</h2>
-          <span class="panel-subtitle">Diagnóstico em tempo real calibrado com os thresholds do Google PageSpeed</span>
+          <h2>Performance & Core Web Vitals</h2>
+          <span class="panel-subtitle">Real-time diagnostics calibrated against Google PageSpeed thresholds</span>
         </div>
         <div class="vitals-meta" id="vitalsMeta">
-          <span class="meta-item">Status: <strong id="auditStateLabel">Aguardando</strong></span>
+          <span class="meta-item">Status: <strong id="auditStateLabel">Idle</strong></span>
         </div>
       </div>
 
@@ -132,8 +126,8 @@
             </div>
           </div>
           <div class="score-details">
-            <span class="score-title">Pontuação Geral</span>
-            <span class="score-status-badge" id="scoreBadge">Sem dados</span>
+            <span class="score-title">Overall Score</span>
+            <span class="score-status-badge" id="scoreBadge">No data</span>
           </div>
         </div>
 
@@ -149,7 +143,7 @@
           </div>
           <div class="card-bottom">
             <span class="metric-name">Largest Contentful Paint</span>
-            <span class="metric-guide">Meta: ≤ 2.5 s</span>
+            <span class="metric-guide">Target: ≤ 2.5 s</span>
           </div>
         </div>
 
@@ -165,7 +159,7 @@
           </div>
           <div class="card-bottom">
             <span class="metric-name">First Contentful Paint</span>
-            <span class="metric-guide">Meta: ≤ 1.8 s</span>
+            <span class="metric-guide">Target: ≤ 1.8 s</span>
           </div>
         </div>
 
@@ -181,7 +175,7 @@
           </div>
           <div class="card-bottom">
             <span class="metric-name">Cumulative Layout Shift</span>
-            <span class="metric-guide">Meta: ≤ 0.1</span>
+            <span class="metric-guide">Target: ≤ 0.10</span>
           </div>
         </div>
 
@@ -197,46 +191,46 @@
           </div>
           <div class="card-bottom">
             <span class="metric-name">Time to First Byte</span>
-            <span class="metric-guide">Meta: ≤ 800 ms</span>
+            <span class="metric-guide">Target: ≤ 800 ms</span>
           </div>
         </div>
 
         <!-- Tester Bandwidth Probe Card -->
         <div class="vital-card client-speed-card" id="cardClientSpeed">
           <div class="card-top">
-            <span class="metric-abbr">BANDA LOCAL</span>
-            <button type="button" class="btn-probe-speed" id="btnProbeSpeed" title="Medir velocidade da sua conexão agora">⚡ Medir</button>
+            <span class="metric-abbr">TESTER BANDWIDTH</span>
+            <button type="button" class="btn-probe-speed" id="btnProbeSpeed" title="Measure tester connection speed now">Run Test</button>
           </div>
           <div class="metric-value-wrapper">
             <span class="metric-value" id="valClientSpeed">--</span>
             <span class="metric-unit">Mbps</span>
           </div>
           <div class="card-bottom">
-            <span class="metric-name" id="labelClientPing">Latência: -- ms</span>
-            <span class="metric-guide" id="labelClientDiag">Conexão do Testador</span>
+            <span class="metric-name" id="labelClientPing">Ping: -- ms</span>
+            <span class="metric-guide" id="labelClientDiag">Tester Connection</span>
           </div>
         </div>
 
         <!-- Summary Stats Card -->
         <div class="vital-card stats-summary-card">
           <div class="summary-row">
-            <span class="summary-label">Total Requisições:</span>
+            <span class="summary-label">Total Requests:</span>
             <span class="summary-val" id="summaryTotalReqs">0</span>
           </div>
           <div class="summary-row">
-            <span class="summary-label">Tamanho Transferido:</span>
+            <span class="summary-label">Transferred Size:</span>
             <span class="summary-val" id="summaryTotalBytes">0 B</span>
           </div>
           <div class="summary-row">
-            <span class="summary-label">Tempo de Carga:</span>
+            <span class="summary-label">Page Load Time:</span>
             <span class="summary-val" id="summaryLoadTime">--</span>
           </div>
           <div class="summary-row">
-            <span class="summary-label">Throughput Site:</span>
+            <span class="summary-label">Effective Throughput:</span>
             <span class="summary-val text-accent" id="summaryEffectiveThroughput">-- Mbps</span>
           </div>
           <div class="summary-row">
-            <span class="summary-label">Falhas / Erros:</span>
+            <span class="summary-label">Failed Requests:</span>
             <span class="summary-val text-danger" id="summaryFailedReqs">0</span>
           </div>
         </div>
@@ -247,35 +241,35 @@
     <section class="network-stream-section">
       <div class="stream-toolbar">
         <div class="toolbar-left">
-          <h3>📡 Requisições de Rede & APIs em Tempo Real</h3>
-          <span class="requests-counter" id="reqCounter">0 requisições capturadas</span>
+          <h3>Network Requests & APIs</h3>
+          <span class="requests-counter" id="reqCounter">0 requests captured</span>
         </div>
 
         <div class="toolbar-filters">
           <div class="filter-buttons" id="filterTabs">
-            <button class="filter-tab active" data-filter="all">Todos <span class="tab-count" id="countAll">0</span></button>
-            <button class="filter-tab" data-filter="api" title="Separar e filtrar requisições de APIs (REST, GraphQL, JSON, Fetch, XHR)">⚡ APIs <span class="tab-count" id="countApi">0</span></button>
+            <button class="filter-tab active" data-filter="all">All <span class="tab-count" id="countAll">0</span></button>
+            <button class="filter-tab" data-filter="api" title="Filter API calls (REST, GraphQL, JSON, Fetch, XHR)">APIs <span class="tab-count" id="countApi">0</span></button>
             <button class="filter-tab" data-filter="fetch">Fetch / XHR <span class="tab-count" id="countFetch">0</span></button>
             <button class="filter-tab" data-filter="script">JS <span class="tab-count" id="countScript">0</span></button>
             <button class="filter-tab" data-filter="stylesheet">CSS <span class="tab-count" id="countCss">0</span></button>
             <button class="filter-tab" data-filter="image">Img <span class="tab-count" id="countImg">0</span></button>
-            <button class="filter-tab" data-filter="font">Fontes <span class="tab-count" id="countFont">0</span></button>
+            <button class="filter-tab" data-filter="font">Fonts <span class="tab-count" id="countFont">0</span></button>
             <button class="filter-tab" data-filter="document">Doc <span class="tab-count" id="countDoc">0</span></button>
           </div>
 
-          <div class="status-filter-wrapper" title="Filtrar requisições por Código de Status HTTP">
+          <div class="status-filter-wrapper" title="Filter requests by HTTP Status Code">
             <span class="status-filter-label">HTTP:</span>
-            <select id="statusFilterSelect" class="status-filter-select" title="Filtrar por Código de Status HTTP">
-              <option value="all">Status: Todos</option>
-              <optgroup label="Faixas de Status">
-                <option value="2xx">🟢 2xx Sucesso</option>
-                <option value="3xx">🔵 3xx Redirecionamento</option>
-                <option value="4xx">🟠 4xx Erro do Cliente</option>
-                <option value="5xx">🔴 5xx Erro do Servidor</option>
-                <option value="error">⚠️ Falhas / Erros de Rede</option>
-                <option value="pending">⏳ Pendentes</option>
+            <select id="statusFilterSelect" class="status-filter-select" title="Filter by HTTP Status Code">
+              <option value="all">Status: All</option>
+              <optgroup label="Status Ranges">
+                <option value="2xx">2xx Success</option>
+                <option value="3xx">3xx Redirect</option>
+                <option value="4xx">4xx Client Error</option>
+                <option value="5xx">5xx Server Error</option>
+                <option value="error">Network Failures</option>
+                <option value="pending">Pending</option>
               </optgroup>
-              <optgroup label="Códigos Específicos">
+              <optgroup label="Specific Codes">
                 <option value="200">200 OK</option>
                 <option value="201">201 Created</option>
                 <option value="204">204 No Content</option>
@@ -295,14 +289,14 @@
           </div>
 
           <div class="api-filter-wrapper">
-            <select id="apiOriginSelect" class="api-origin-select hidden" title="Separar requisições por API / Domínio">
-              <option value="all">Todas as APIs</option>
+            <select id="apiOriginSelect" class="api-origin-select hidden" title="Filter requests by API origin / domain">
+              <option value="all">All APIs</option>
             </select>
           </div>
 
           <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="searchFilter" class="search-input" placeholder="Filtrar por URL, método, status...">
+            <span class="search-prefix">/</span>
+            <input type="text" id="searchFilter" class="search-input" placeholder="Filter by URL, method, status (e.g. status:404)...">
           </div>
         </div>
       </div>
@@ -313,12 +307,12 @@
           <thead>
             <tr>
               <th style="width: 80px;">Status</th>
-              <th style="width: 80px;">Método</th>
-              <th>Nome / Endpoint</th>
-              <th style="width: 100px;">Tipo</th>
-              <th style="width: 100px;">Tamanho</th>
-              <th style="width: 100px;">Duração</th>
-              <th style="width: 140px;">Cascata (Timeline)</th>
+              <th style="width: 80px;">Method</th>
+              <th>Name / Endpoint</th>
+              <th style="width: 100px;">Type</th>
+              <th style="width: 100px;">Size</th>
+              <th style="width: 100px;">Time</th>
+              <th style="width: 140px;">Waterfall</th>
             </tr>
           </thead>
           <tbody id="networkTableBody">
@@ -326,9 +320,8 @@
             <tr class="empty-state-row" id="emptyStateRow">
               <td colspan="7">
                 <div class="empty-state">
-                  <div class="empty-icon">🌐</div>
-                  <div class="empty-title">Nenhuma requisição monitorada ainda</div>
-                  <div class="empty-desc">Insira uma URL acima e clique em 'Analisar Site' para acompanhar chamadas de APIs e download de recursos em tempo real.</div>
+                  <div class="empty-title">No requests recorded yet</div>
+                  <div class="empty-desc">Enter a target URL above and click 'Start Audit' to monitor API calls and network waterfall in real time.</div>
                 </div>
               </td>
             </tr>
@@ -338,46 +331,84 @@
     </section>
   </main>
 
-  <!-- Login Modal -->
-  <div class="modal-backdrop hidden" id="loginModal">
-    <div class="modal-card">
+  <!-- Audit History Modal (SQLite) -->
+  <div class="modal-backdrop hidden" id="historyModal" role="dialog" aria-label="Audit Execution History">
+    <div class="modal-card history-modal-card">
       <div class="modal-header">
-        <h3>🔐 Autenticação de Usuário</h3>
-        <button class="btn-close-modal" id="btnCloseModal">✕</button>
+        <div class="modal-header-title">
+          <h3>Audit History</h3>
+          <span class="modal-subtitle">Comprehensive record of past website performance runs stored in SQLite</span>
+        </div>
+        <div class="modal-header-actions">
+          <button type="button" class="btn btn-secondary btn-sm" id="btnClearHistory" title="Clear all recorded history">Clear History</button>
+          <button type="button" class="btn-close-modal" id="btnCloseHistoryModal" title="Close (Esc)">✕</button>
+        </div>
       </div>
-      <form id="loginForm" class="modal-form">
-        <div class="form-group">
-          <label for="inputEmail">E-mail ou Usuário:</label>
-          <input type="text" id="inputEmail" class="form-input" placeholder="seu.usuario@exemplo.com" required>
+      <div class="history-content-container">
+        <div class="history-summary-bar" id="historySummaryBar">
+          <div class="history-stat-item">
+            <span class="history-stat-label">Total Audits:</span>
+            <strong class="history-stat-val" id="statHistoryTotal">0</strong>
+          </div>
+          <div class="history-stat-item">
+            <span class="history-stat-label">Average Score:</span>
+            <strong class="history-stat-val" id="statHistoryAvgScore">--</strong>
+          </div>
+          <div class="history-stat-item">
+            <span class="history-stat-label">Average Load Time:</span>
+            <strong class="history-stat-val" id="statHistoryAvgTime">--</strong>
+          </div>
+          <div class="history-stat-item">
+            <span class="history-stat-label">Database Engine:</span>
+            <span class="sqlite-badge">SQLite Local</span>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="inputPassword">Senha:</label>
-          <input type="password" id="inputPassword" class="form-input" placeholder="••••••••" required>
+
+        <div class="history-table-wrapper">
+          <table class="history-table" id="historyTable">
+            <thead>
+              <tr>
+                <th style="width: 140px;">Date / Time</th>
+                <th>Target URL</th>
+                <th style="width: 80px;">Score</th>
+                <th style="width: 90px;">Load Time</th>
+                <th style="width: 80px;">Requests</th>
+                <th style="width: 90px;">Size</th>
+                <th style="width: 100px;">Profile</th>
+                <th style="width: 110px;">Tester Speed</th>
+                <th style="width: 90px;">Status</th>
+                <th style="width: 120px; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+          <div class="history-empty-state hidden" id="historyEmptyState">
+            <p class="empty-title">No audit history recorded yet</p>
+            <span class="empty-subtext">Run a performance audit to have metrics automatically saved to your local SQLite database.</span>
+          </div>
         </div>
-        <div class="modal-actions">
-          <button type="button" class="btn btn-secondary" id="btnCancelLogin">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Entrar no Sistema</button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
 
   <!-- Request Details Inspection Drawer -->
-  <aside class="request-drawer hidden" id="requestDrawer" aria-label="Detalhes da Requisição">
+  <aside class="request-drawer hidden" id="requestDrawer" aria-label="Request Details">
     <div class="drawer-header">
       <div class="drawer-title-group">
         <span class="drawer-badge" id="drawerMethod">GET</span>
-        <h3 class="drawer-title" id="drawerTitle">Detalhes da Requisição</h3>
+        <h3 class="drawer-title" id="drawerTitle">Request Details</h3>
       </div>
       <div class="drawer-actions">
-        <button type="button" class="btn-clear drawer-btn-copy" id="btnCopyUrl" title="Copiar URL completa">📋 Copiar URL</button>
-        <button type="button" class="btn-close-modal" id="btnCloseDrawer" title="Fechar (Esc)">✕</button>
+        <button type="button" class="btn-clear drawer-btn-copy" id="btnCopyUrl" title="Copy full URL">Copy URL</button>
+        <button type="button" class="btn-close-modal" id="btnCloseDrawer" title="Close (Esc)">✕</button>
       </div>
     </div>
 
     <div class="drawer-tabs">
-      <button class="drawer-tab active" data-drawer-tab="headers">Cabeçalhos (Headers)</button>
-      <button class="drawer-tab" data-drawer-tab="timing">Timing & Rede</button>
+      <button class="drawer-tab active" data-drawer-tab="headers">Headers</button>
+      <button class="drawer-tab" data-drawer-tab="timing">Timing & Network</button>
     </div>
 
     <div class="drawer-content">
@@ -385,7 +416,7 @@
       <div class="drawer-tab-pane active" id="paneHeaders">
         <!-- General Info Section -->
         <div class="drawer-section">
-          <h4 class="drawer-section-title">Geral</h4>
+          <h4 class="drawer-section-title">General</h4>
           <div class="drawer-info-grid" id="drawerGeneralInfo">
             <!-- Populated dynamically -->
           </div>
@@ -393,7 +424,7 @@
 
         <!-- Response Headers Section -->
         <div class="drawer-section">
-          <h4 class="drawer-section-title">Cabeçalhos de Resposta (<span id="responseHeadersCount">0</span>)</h4>
+          <h4 class="drawer-section-title">Response Headers (<span id="responseHeadersCount">0</span>)</h4>
           <div class="headers-table" id="responseHeadersTable">
             <!-- Populated dynamically -->
           </div>
@@ -401,7 +432,7 @@
 
         <!-- Request Headers Section -->
         <div class="drawer-section">
-          <h4 class="drawer-section-title">Cabeçalhos de Requisição (<span id="requestHeadersCount">0</span>)</h4>
+          <h4 class="drawer-section-title">Request Headers (<span id="requestHeadersCount">0</span>)</h4>
           <div class="headers-table" id="requestHeadersTable">
             <!-- Populated dynamically -->
           </div>
@@ -411,7 +442,7 @@
       <!-- Tab 2: Timing & Connection -->
       <div class="drawer-tab-pane hidden" id="paneTiming">
         <div class="drawer-section">
-          <h4 class="drawer-section-title">Informações de Conexão & Performance</h4>
+          <h4 class="drawer-section-title">Connection & Performance Breakdown</h4>
           <div class="drawer-info-grid" id="drawerTimingInfo">
             <!-- Populated dynamically -->
           </div>

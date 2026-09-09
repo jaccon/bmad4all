@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   probeSpeed: () => ipcRenderer.invoke('network:probe-speed'),
   getSystemInfo: () => ipcRenderer.invoke('app:get-system-info'),
 
+  // SQLite History API
+  getHistory: (limit) => ipcRenderer.invoke('history:get-all', limit),
+  saveAuditHistory: (record) => ipcRenderer.invoke('history:save', record),
+  deleteAuditHistory: (id) => ipcRenderer.invoke('history:delete', id),
+  clearAuditHistory: () => ipcRenderer.invoke('history:clear'),
+
   onRequestStarted: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('audit:request-started', handler);

@@ -2,9 +2,25 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { SiteAuditor } = require('./auditor.js');
 const { probeClientSpeed } = require('../shared/speed-tester.js');
+const { AuditDatabase } = require('./db.js');
 
 let mainWindow = null;
 let auditor = null;
+let auditDb = null;
+
+function getDatabase() {
+  if (!auditDb) {
+    let dbDir;
+    try {
+      dbDir = app.getPath('userData');
+    } catch (e) {
+      dbDir = path.join(__dirname, '../../data');
+    }
+    const dbPath = path.join(dbDir, 'audit_history.sqlite');
+    auditDb = new AuditDatabase(dbPath);
+  }
+  return auditDb;
+}
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -12,7 +28,7 @@ function createMainWindow() {
     height: 920,
     minWidth: 1080,
     minHeight: 700,
-    backgroundColor: '#0b0f19',
+    backgroundColor: '#000000',
     title: 'PageSpeed & Network Monitor',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
@@ -36,7 +52,7 @@ function createMainWindow() {
   });
 }
 
-// IPC Handlers
+// IPC Handlers: Audit Execution
 ipcMain.handle('audit:start', async (event, payload) => {
   if (!auditor && mainWindow) {
     auditor = new SiteAuditor(mainWindow);
@@ -47,7 +63,7 @@ ipcMain.handle('audit:start', async (event, payload) => {
     await auditor.startAudit(url, throttling);
     return { ok: true };
   }
-  return { ok: false, error: 'Auditor não inicializado' };
+  return { ok: false, error: 'Auditor not initialized' };
 });
 
 ipcMain.handle('audit:stop', async () => {
@@ -58,8 +74,50 @@ ipcMain.handle('audit:stop', async () => {
   return { ok: false };
 });
 
+// IPC Handlers: Network Speed Probe
 ipcMain.handle('network:probe-speed', async () => {
   return await probeClientSpeed();
+});
+
+// IPC Handlers: SQLite Audit History
+ipcMain.handle('history:get-all', async (event, limit) => {
+  try {
+    const db = getDatabase();
+    return await db.getHistory(limit || 100);
+  } catch (err) {
+    console.error('[Main] history:get-all error:', err.message);
+    return [];
+  }
+});
+
+ipcMain.handle('history:save', async (event, record) => {
+  try {
+    const db = getDatabase();
+    return await db.saveAudit(record || {});
+  } catch (err) {
+    console.error('[Main] history:save error:', err.message);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('history:delete', async (event, id) => {
+  try {
+    const db = getDatabase();
+    return await db.deleteAudit(id);
+  } catch (err) {
+    console.error('[Main] history:delete error:', err.message);
+    return false;
+  }
+});
+
+ipcMain.handle('history:clear', async () => {
+  try {
+    const db = getDatabase();
+    return await db.clearHistory();
+  } catch (err) {
+    console.error('[Main] history:clear error:', err.message);
+    return false;
+  }
 });
 
 ipcMain.handle('app:get-system-info', () => {
@@ -71,7 +129,14 @@ ipcMain.handle('app:get-system-info', () => {
   };
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  try {
+    const db = getDatabase();
+    await db.init();
+  } catch (e) {
+    console.error('[Main] Failed to initialize SQLite database:', e.message);
+  }
+
   createMainWindow();
 
   app.on('activate', () => {
@@ -90,5 +155,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   if (auditor) {
     await auditor.stopAudit();
+  }
+  if (auditDb) {
+    auditDb.close();
   }
 });
