@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteAuditHistory: (id) => ipcRenderer.invoke('history:delete', id),
   clearAuditHistory: () => ipcRenderer.invoke('history:clear'),
 
+  // Export Log API
+  exportLog: (logContent, defaultFilename) => ipcRenderer.invoke('audit:export-log', { logContent, defaultFilename }),
+
   onRequestStarted: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('audit:request-started', handler);

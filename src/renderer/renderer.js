@@ -35,9 +35,11 @@
   const detectedApiOrigins = new Map(); // origin -> count
   const detectedStatusCodes = new Set(); // set of unique status codes observed
   const requestsMap = new Map(); // id -> { rowEl, req }
+  const allCapturedRequestsMap = new Map(); // id -> complete req for audit log export
   const orderedRowIds = [];
   const MAX_DOM_ROWS = 500; // Cap DOM elements to prevent UI lag
   let maxDurationSeen = 100; // ms, for timeline waterfall scaling
+  let systemInfo = null;
 
   // RAF Batch Queue
   let pendingUpdates = new Map(); // id -> req
@@ -301,6 +303,32 @@
         tdScore.textContent = '--';
       }
 
+      // Web Vitals (LCP / FCP / CLS / TTFB)
+      const tdVitals = document.createElement('td');
+      tdVitals.className = 'history-vitals-cell';
+
+      const createMiniVitalBadge = (label, val, unit, evalFn) => {
+        const badge = document.createElement('span');
+        badge.className = 'vital-mini-badge';
+        if (val === null || val === undefined || isNaN(val)) {
+          badge.textContent = `${label}: --`;
+        } else {
+          const evalClass = evalFn(val);
+          badge.className += ` ${evalClass}`;
+          const formatted = unit === 'score' ? Number(val).toFixed(2) :
+                            val >= 1000 ? `${(val / 1000).toFixed(2)}s` :
+                            `${Math.round(val)}ms`;
+          badge.textContent = `${label}: ${formatted}`;
+          badge.title = `${label}: ${formatted} (${evalClass})`;
+        }
+        return badge;
+      };
+
+      tdVitals.appendChild(createMiniVitalBadge('LCP', item.lcp, 'ms', v => v <= 2500 ? 'good' : v <= 4000 ? 'needs-improvement' : 'poor'));
+      tdVitals.appendChild(createMiniVitalBadge('FCP', item.fcp, 'ms', v => v <= 1800 ? 'good' : v <= 3000 ? 'needs-improvement' : 'poor'));
+      tdVitals.appendChild(createMiniVitalBadge('CLS', item.cls, 'score', v => v <= 0.10 ? 'good' : v <= 0.25 ? 'needs-improvement' : 'poor'));
+      tdVitals.appendChild(createMiniVitalBadge('TTFB', item.ttfb, 'ms', v => v <= 800 ? 'good' : v <= 1800 ? 'needs-improvement' : 'poor'));
+
       // Load Time
       const tdTime = document.createElement('td');
       tdTime.style.fontFamily = 'var(--font-mono)';
@@ -383,6 +411,7 @@
       tr.appendChild(tdDate);
       tr.appendChild(tdUrl);
       tr.appendChild(tdScore);
+      tr.appendChild(tdVitals);
       tr.appendChild(tdTime);
       tr.appendChild(tdReqs);
       tr.appendChild(tdSize);
@@ -494,6 +523,7 @@
 
   function resetStateForAudit() {
     requestsMap.clear();
+    allCapturedRequestsMap.clear();
     orderedRowIds.length = 0;
     detectedApiOrigins.clear();
     detectedStatusCodes.clear();
@@ -862,6 +892,8 @@
   function scheduleBatchUpdate(req) {
     if (!req || !req.id) return;
     pendingUpdates.set(req.id, req);
+    const existing = allCapturedRequestsMap.get(req.id) || {};
+    allCapturedRequestsMap.set(req.id, { ...existing, ...req });
 
     if (!rafScheduled) {
       rafScheduled = true;
@@ -1080,6 +1112,11 @@
         currentSearch = searchFilter.value.trim().toLowerCase();
         applyFilter();
       });
+    }
+
+    const btnExportLog = document.getElementById('btnExportLog');
+    if (btnExportLog) {
+      btnExportLog.addEventListener('click', exportAuditLog);
     }
   }
 
@@ -1525,6 +1562,239 @@
   }
 
   /* -------------------------------------------------------------------------- */
+  /* Audit Log Export (.log Plain Text Generator)                               */
+  /* -------------------------------------------------------------------------- */
+  function generateAuditLogText() {
+    const divider = '='.repeat(84);
+    const subDivider = '-'.repeat(84);
+    const lines = [];
+
+    const now = new Date();
+    const timestampStr = now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+
+    lines.push(divider);
+    lines.push('                    WEBSITE PERFORMANCE & NETWORK AUDIT LOG');
+    lines.push(divider);
+    lines.push(`Generated:        ${timestampStr}`);
+    lines.push(`Target URL:       ${lastAuditedUrl || (urlInput ? urlInput.value : 'N/A')}`);
+    lines.push(`Audit Status:     ${isAuditing ? 'RUNNING' : (statusMessage ? statusMessage.textContent : 'COMPLETED')}`);
+    lines.push(`Overall Score:    ${currentOverallScore !== null ? currentOverallScore + ' / 100' : 'N/A'}`);
+    lines.push(`Network Profile:  ${currentThrottlingProfile || 'none'}`);
+    lines.push(`Tester Bandwidth: ${clientSpeedMbps > 0 ? clientSpeedMbps.toFixed(2) + ' Mbps' : 'Not measured'}`);
+    lines.push(`Tester Latency:   ${clientPingMs > 0 ? clientPingMs + ' ms' : 'Not measured'}`);
+    if (systemInfo) {
+      lines.push(`Environment:      Electron ${systemInfo.electronVersion} | Chrome ${systemInfo.chromeVersion} | Node ${systemInfo.nodeVersion} (${systemInfo.platform})`);
+    }
+    lines.push('');
+
+    // Section 1: Core Web Vitals
+    lines.push(subDivider);
+    lines.push('CORE WEB VITALS & PERFORMANCE METRICS');
+    lines.push(subDivider);
+
+    const formatMetricLine = (name, full, val, unit, goodThresh, poorThresh) => {
+      if (val === null || val === undefined || isNaN(val)) {
+        return `- ${name.padEnd(6)} (${full.padEnd(28)}):  N/A`;
+      }
+      let status = 'GOOD';
+      if (val > poorThresh) status = 'POOR';
+      else if (val > goodThresh) status = 'NEEDS IMPROVEMENT';
+
+      const valFormatted = unit === 'score' ? Number(val).toFixed(3) : `${Math.round(val)} ms`;
+      const target = unit === 'score' ? `<= ${goodThresh}` : `<= ${(goodThresh / 1000).toFixed(1)}s`;
+      return `- ${name.padEnd(6)} (${full.padEnd(28)}):  ${valFormatted.padStart(10)}  [${status}]  (Target: ${target})`;
+    };
+
+    lines.push(formatMetricLine('LCP', 'Largest Contentful Paint', currentMetrics.LCP, 'ms', 2500, 4000));
+    lines.push(formatMetricLine('FCP', 'First Contentful Paint', currentMetrics.FCP, 'ms', 1800, 3000));
+    lines.push(formatMetricLine('CLS', 'Cumulative Layout Shift', currentMetrics.CLS, 'score', 0.10, 0.25));
+    lines.push(formatMetricLine('TTFB', 'Time to First Byte', currentMetrics.TTFB, 'ms', 800, 1800));
+    if (currentMetrics.INP !== null && currentMetrics.INP !== undefined) {
+      lines.push(formatMetricLine('INP', 'Interaction to Next Paint', currentMetrics.INP, 'ms', 200, 500));
+    }
+    lines.push('');
+
+    // Section 2: Loading & Network Summary
+    lines.push(subDivider);
+    lines.push('NETWORK & LOADING SUMMARY');
+    lines.push(subDivider);
+    const totalCount = allCapturedRequestsMap.size > 0 ? allCapturedRequestsMap.size : (lastStats.totalRequests || 0);
+    lines.push(`- Total Requests:         ${totalCount}`);
+    lines.push(`- Total Transferred Size: ${formatBytes(lastStats.totalBytes)} (${lastStats.totalBytes || 0} bytes)`);
+    lines.push(`- Total Page Load Time:   ${lastLoadTimeMs ? (lastLoadTimeMs / 1000).toFixed(2) + ' s (' + Math.round(lastLoadTimeMs) + ' ms)' : 'N/A'}`);
+    lines.push(`- Effective Throughput:   ${summaryEffectiveThroughput ? summaryEffectiveThroughput.textContent : 'N/A'}`);
+    lines.push(`- Failed Requests:        ${lastStats.failedRequests || 0}`);
+
+    // Category breakdown
+    const catCounts = { document: 0, script: 0, stylesheet: 0, image: 0, font: 0, fetch: 0, api: 0, other: 0 };
+    const catBytes = { document: 0, script: 0, stylesheet: 0, image: 0, font: 0, fetch: 0, api: 0, other: 0 };
+
+    const reqList = Array.from(allCapturedRequestsMap.values());
+    reqList.forEach(r => {
+      const cat = r.category || 'other';
+      if (catCounts[cat] !== undefined) {
+        catCounts[cat]++;
+        catBytes[cat] += (r.transferSize || r.encodedDataLength || 0);
+      } else {
+        catCounts.other++;
+        catBytes.other += (r.transferSize || r.encodedDataLength || 0);
+      }
+      if (r.isApi) {
+        catCounts.api++;
+        catBytes.api += (r.transferSize || r.encodedDataLength || 0);
+      }
+    });
+
+    lines.push('');
+    lines.push('Resource Breakdown:');
+    Object.keys(catCounts).forEach(k => {
+      if (catCounts[k] > 0) {
+        const label = k.toUpperCase().padEnd(12);
+        lines.push(`  * ${label}: ${String(catCounts[k]).padStart(4)} requests | ${formatBytes(catBytes[k]).padStart(9)} transferred`);
+      }
+    });
+
+    // Detected API Origins
+    if (detectedApiOrigins.size > 0) {
+      lines.push('');
+      lines.push(`Detected API Endpoints (${detectedApiOrigins.size}):`);
+      for (const [origin, count] of detectedApiOrigins.entries()) {
+        lines.push(`  * ${origin} (${count} calls)`);
+      }
+    }
+    lines.push('');
+
+    // Section 3: Detailed Chronological Waterfall
+    lines.push(subDivider);
+    lines.push(`CHRONOLOGICAL NETWORK REQUEST WATERFALL (${reqList.length} Requests)`);
+    lines.push(subDivider);
+
+    if (reqList.length === 0) {
+      lines.push('(No network requests captured)');
+    } else {
+      reqList.forEach((r, idx) => {
+        const num = String(idx + 1).padStart(3, '0');
+        const method = (r.method || 'GET').padEnd(6);
+        const status = r.statusCode ? `${r.statusCode} ${r.statusText || 'OK'}` : (r.status === 'failed' ? `FAILED (${r.errorText || 'Error'})` : 'PENDING');
+        const sizeStr = formatBytes(r.transferSize || r.encodedDataLength || 0);
+        const durationStr = typeof r.duration === 'number' ? `${Math.round(r.duration)} ms` : '--';
+        const typeStr = r.isApi ? `API (${r.category || 'fetch'})` : (r.category || 'other');
+
+        lines.push(`[#${num}] ${method} ${status} | ${typeStr} | ${sizeStr} | ${durationStr}`);
+        lines.push(`      URL:        ${r.url}`);
+        if (r.remoteIPAddress) {
+          lines.push(`      Remote IP:  ${r.remoteIPAddress}${r.protocol ? ' (' + r.protocol + ')' : ''}`);
+        }
+        if (r.fromDiskCache) {
+          lines.push(`      Cache:      Served from Disk Cache`);
+        }
+        if (r.decodedBodyLength && r.decodedBodyLength !== (r.transferSize || r.encodedDataLength)) {
+          lines.push(`      Decoded:    ${formatBytes(r.decodedBodyLength)} (decompressed)`);
+        }
+
+        // Timing breakdown if available
+        if (r.timing) {
+          const t = r.timing;
+          const timingParts = [];
+          if (typeof t.dnsStart === 'number' && typeof t.dnsEnd === 'number' && t.dnsEnd >= t.dnsStart) {
+            timingParts.push(`DNS: ${Math.round(t.dnsEnd - t.dnsStart)}ms`);
+          }
+          if (typeof t.connectStart === 'number' && typeof t.connectEnd === 'number' && t.connectEnd >= t.connectStart) {
+            timingParts.push(`Connect: ${Math.round(t.connectEnd - t.connectStart)}ms`);
+          }
+          if (typeof t.sslStart === 'number' && typeof t.sslEnd === 'number' && t.sslEnd >= t.sslStart) {
+            timingParts.push(`SSL: ${Math.round(t.sslEnd - t.sslStart)}ms`);
+          }
+          if (typeof t.sendEnd === 'number' && typeof t.receiveHeadersEnd === 'number' && t.receiveHeadersEnd >= t.sendEnd) {
+            timingParts.push(`TTFB: ${Math.round(t.receiveHeadersEnd - t.sendEnd)}ms`);
+          }
+          if (timingParts.length > 0) {
+            lines.push(`      Timing:     ${timingParts.join(' | ')}`);
+          }
+        }
+
+        // Headers preview
+        if (r.responseHeaders && typeof r.responseHeaders === 'object') {
+          const headerKeys = Object.keys(r.responseHeaders);
+          if (headerKeys.length > 0) {
+            const previewHeaders = ['content-type', 'content-length', 'cache-control', 'server', 'x-cache'];
+            const relevant = [];
+            for (const k of previewHeaders) {
+              const matchedKey = headerKeys.find(hk => hk.toLowerCase() === k);
+              if (matchedKey) {
+                relevant.push(`${matchedKey}: ${r.responseHeaders[matchedKey]}`);
+              }
+            }
+            if (relevant.length > 0) {
+              lines.push(`      Headers:    ${relevant.join('; ')}`);
+            }
+          }
+        }
+
+        lines.push('');
+      });
+    }
+
+    lines.push(divider);
+    lines.push('                             END OF AUDIT LOG');
+    lines.push(divider);
+
+    return lines.join('\n');
+  }
+
+  async function exportAuditLog() {
+    const targetUrl = lastAuditedUrl || (urlInput ? urlInput.value.trim() : '');
+    if (allCapturedRequestsMap.size === 0 && !targetUrl) {
+      showToast('No audit data to export. Run an audit first.', 'warning', 3000);
+      return;
+    }
+
+    const logText = generateAuditLogText();
+
+    let host = 'audit';
+    try {
+      if (targetUrl) {
+        const u = new URL(normalizeInputUrl(targetUrl));
+        host = u.hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
+      }
+    } catch (e) {}
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+    const defaultFilename = `audit-${host}-${dateStr}-${timeStr}.log`;
+
+    try {
+      if (window.electronAPI && window.electronAPI.exportLog) {
+        const res = await window.electronAPI.exportLog(logText, defaultFilename);
+        if (res && res.ok && res.filePath) {
+          const filename = res.filePath.split(/[/\\]/).pop();
+          showToast(`Log file saved: ${filename}`, 'success', 3500);
+        } else if (res && res.canceled) {
+          // Cancelled by user
+        } else if (res && res.error) {
+          showToast(`Failed to export log: ${res.error}`, 'error', 3500);
+        }
+      } else {
+        // Fallback: browser download
+        const blob = new Blob([logText], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = defaultFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Log file downloaded: ${defaultFilename}`, 'success', 3000);
+      }
+    } catch (err) {
+      console.error('[ExportLog] Error:', err);
+      showToast(`Error exporting log: ${err.message}`, 'error', 3500);
+    }
+  }
+
+  /* -------------------------------------------------------------------------- */
   /* Utility String & Format Helpers                                            */
   /* -------------------------------------------------------------------------- */
   function extractDomain(urlStr) {
@@ -1590,6 +1860,13 @@
 
     // Initial load of audit history
     loadAuditHistory();
+
+    // Fetch system environment info
+    if (window.electronAPI && window.electronAPI.getSystemInfo) {
+      window.electronAPI.getSystemInfo().then(info => {
+        systemInfo = info;
+      }).catch(() => {});
+    }
   }
 
   if (document.readyState === 'loading') {

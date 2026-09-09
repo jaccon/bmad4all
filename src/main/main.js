@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { SiteAuditor } = require('./auditor.js');
 const { probeClientSpeed } = require('../shared/speed-tester.js');
@@ -117,6 +118,36 @@ ipcMain.handle('history:clear', async () => {
   } catch (err) {
     console.error('[Main] history:clear error:', err.message);
     return false;
+  }
+});
+
+ipcMain.handle('audit:export-log', async (event, payload) => {
+  try {
+    const { logContent, defaultFilename } = payload || {};
+    if (!logContent) {
+      return { ok: false, error: 'No content to export' };
+    }
+
+    const defaultName = defaultFilename || `audit-${Date.now()}.log`;
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Audit Log',
+      defaultPath: defaultName,
+      filters: [
+        { name: 'Log Files (*.log)', extensions: ['log'] },
+        { name: 'Text Files (*.txt)', extensions: ['txt'] },
+        { name: 'All Files (*.*)', extensions: ['*'] }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { ok: false, canceled: true };
+    }
+
+    fs.writeFileSync(filePath, logContent, 'utf-8');
+    return { ok: true, filePath };
+  } catch (err) {
+    console.error('[Main] audit:export-log error:', err.message);
+    return { ok: false, error: err.message };
   }
 });
 

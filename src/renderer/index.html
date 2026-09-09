@@ -148,9 +148,18 @@
         </div>
 
         <!-- LCP Card -->
-        <div class="vital-card" id="cardLCP">
+        <div class="vital-card" id="cardLCP" title="Largest Contentful Paint (LCP): Measures loading performance. Marks the point when the largest text block or image element is rendered on screen. Target: ≤ 2.5 s">
           <div class="card-top">
-            <span class="metric-abbr">LCP</span>
+            <div class="metric-header-left">
+              <span class="metric-abbr">LCP</span>
+              <span class="metric-info-hint" tabindex="0" role="tooltip" aria-label="LCP information">?
+                <span class="tooltip-popup">
+                  <strong class="tooltip-title">Largest Contentful Paint (LCP)</strong>
+                  <span class="tooltip-desc">Measures loading performance. Marks the time when the main content (hero image, heading, or large text block) has rendered on screen.</span>
+                  <span class="tooltip-target">Target: ≤ 2.5 s (Good)</span>
+                </span>
+              </span>
+            </div>
             <span class="metric-badge" id="badgeLCP">--</span>
           </div>
           <div class="metric-value-wrapper">
@@ -164,9 +173,18 @@
         </div>
 
         <!-- FCP Card -->
-        <div class="vital-card" id="cardFCP">
+        <div class="vital-card" id="cardFCP" title="First Contentful Paint (FCP): Measures perceived load speed. Marks the time when the browser renders the first piece of DOM content (text, image, or SVG). Target: ≤ 1.8 s">
           <div class="card-top">
-            <span class="metric-abbr">FCP</span>
+            <div class="metric-header-left">
+              <span class="metric-abbr">FCP</span>
+              <span class="metric-info-hint" tabindex="0" role="tooltip" aria-label="FCP information">?
+                <span class="tooltip-popup">
+                  <strong class="tooltip-title">First Contentful Paint (FCP)</strong>
+                  <span class="tooltip-desc">Measures perceived load speed. Marks the time when the browser renders the first piece of DOM content (text, image, canvas, or SVG).</span>
+                  <span class="tooltip-target">Target: ≤ 1.8 s (Good)</span>
+                </span>
+              </span>
+            </div>
             <span class="metric-badge" id="badgeFCP">--</span>
           </div>
           <div class="metric-value-wrapper">
@@ -180,9 +198,18 @@
         </div>
 
         <!-- CLS Card -->
-        <div class="vital-card" id="cardCLS">
+        <div class="vital-card" id="cardCLS" title="Cumulative Layout Shift (CLS): Measures visual stability. Quantifies unexpected shifts of visible elements during page load. Target: ≤ 0.10">
           <div class="card-top">
-            <span class="metric-abbr">CLS</span>
+            <div class="metric-header-left">
+              <span class="metric-abbr">CLS</span>
+              <span class="metric-info-hint" tabindex="0" role="tooltip" aria-label="CLS information">?
+                <span class="tooltip-popup">
+                  <strong class="tooltip-title">Cumulative Layout Shift (CLS)</strong>
+                  <span class="tooltip-desc">Measures visual stability. Quantifies unexpected layout shifts of visible elements during page load to prevent jarring jumps.</span>
+                  <span class="tooltip-target">Target: ≤ 0.10 (Good)</span>
+                </span>
+              </span>
+            </div>
             <span class="metric-badge" id="badgeCLS">--</span>
           </div>
           <div class="metric-value-wrapper">
@@ -196,9 +223,18 @@
         </div>
 
         <!-- TTFB Card -->
-        <div class="vital-card" id="cardTTFB">
+        <div class="vital-card" id="cardTTFB" title="Time to First Byte (TTFB): Measures server responsiveness. Elapsed time from request initiation until receiving the first byte of response data. Target: ≤ 800 ms">
           <div class="card-top">
-            <span class="metric-abbr">TTFB</span>
+            <div class="metric-header-left">
+              <span class="metric-abbr">TTFB</span>
+              <span class="metric-info-hint" tabindex="0" role="tooltip" aria-label="TTFB information">?
+                <span class="tooltip-popup">
+                  <strong class="tooltip-title">Time to First Byte (TTFB)</strong>
+                  <span class="tooltip-desc">Measures server responsiveness and connection speed. Elapsed time from request dispatch to arrival of the first byte of response.</span>
+                  <span class="tooltip-target">Target: ≤ 800 ms (Good)</span>
+                </span>
+              </span>
+            </div>
             <span class="metric-badge" id="badgeTTFB">--</span>
           </div>
           <div class="metric-value-wrapper">
@@ -298,6 +334,14 @@
             <span class="search-prefix">/</span>
             <input type="text" id="searchFilter" class="search-input" placeholder="Filter by URL, method, status (e.g. status:404)...">
           </div>
+
+          <button type="button" class="btn-export-log" id="btnExportLog" title="Export complete audit summary, performance metrics, and network requests log as plain text (.log)">
+            <svg class="export-icon" viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+            </svg>
+            Export .log
+          </button>
         </div>
       </div>
 
@@ -368,16 +412,17 @@
           <table class="history-table" id="historyTable">
             <thead>
               <tr>
-                <th style="width: 140px;">Date / Time</th>
+                <th style="width: 130px;">Date / Time</th>
                 <th>Target URL</th>
-                <th style="width: 80px;">Score</th>
-                <th style="width: 90px;">Load Time</th>
-                <th style="width: 80px;">Requests</th>
-                <th style="width: 90px;">Size</th>
-                <th style="width: 100px;">Profile</th>
-                <th style="width: 110px;">Tester Speed</th>
-                <th style="width: 90px;">Status</th>
-                <th style="width: 120px; text-align: right;">Actions</th>
+                <th style="width: 70px;">Score</th>
+                <th style="width: 230px;">Web Vitals (LCP / FCP / CLS / TTFB)</th>
+                <th style="width: 85px;">Load Time</th>
+                <th style="width: 70px;">Requests</th>
+                <th style="width: 80px;">Size</th>
+                <th style="width: 90px;">Profile</th>
+                <th style="width: 95px;">Tester Speed</th>
+                <th style="width: 85px;">Status</th>
+                <th style="width: 110px; text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="historyTableBody">
