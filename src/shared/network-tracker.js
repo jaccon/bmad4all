@@ -84,7 +84,12 @@ class NetworkTracker {
       durationMs: 0,
       encodedDataLength: 0,
       errorText: null,
-      initiator: params.initiator ? params.initiator.type : null
+      initiator: params.initiator ? params.initiator.type : null,
+      requestHeaders: (request.headers && typeof request.headers === 'object' && !Array.isArray(request.headers)) ? { ...request.headers } : {},
+      responseHeaders: {},
+      protocol: '',
+      remoteIPAddress: '',
+      postData: request.postData || null
     };
 
     if (!this.requests.has(id)) {
@@ -120,6 +125,15 @@ class NetworkTracker {
     record.statusCode = response.status || 200;
     record.statusText = response.statusText || 'OK';
     record.mimeType = response.mimeType || '';
+    if (response.headers && typeof response.headers === 'object' && !Array.isArray(response.headers)) {
+      record.responseHeaders = { ...response.headers };
+    }
+    if (response.protocol) {
+      record.protocol = response.protocol;
+    }
+    if (response.remoteIPAddress) {
+      record.remoteIPAddress = response.remoteIPAddress;
+    }
 
     if (typeof response.encodedDataLength === 'number' && !isNaN(response.encodedDataLength) && response.encodedDataLength > 0) {
       const added = Math.max(0, response.encodedDataLength - record.encodedDataLength);

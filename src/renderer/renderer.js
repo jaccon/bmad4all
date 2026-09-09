@@ -78,6 +78,34 @@
   const loginForm = document.getElementById('loginForm');
   const inputEmail = document.getElementById('inputEmail');
 
+  // Status Banner & Retry
+  const statusDot = document.getElementById('statusDot');
+  const btnRetry = document.getElementById('btnRetry');
+  let lastAuditedUrl = '';
+
+  // Drawer Elements
+  const requestDrawer = document.getElementById('requestDrawer');
+  const drawerBackdrop = document.getElementById('drawerBackdrop');
+  const btnCloseDrawer = document.getElementById('btnCloseDrawer');
+  const btnCopyUrl = document.getElementById('btnCopyUrl');
+  const drawerMethod = document.getElementById('drawerMethod');
+  const drawerTitle = document.getElementById('drawerTitle');
+
+  const paneHeaders = document.getElementById('paneHeaders');
+  const paneTiming = document.getElementById('paneTiming');
+  const drawerGeneralInfo = document.getElementById('drawerGeneralInfo');
+  const responseHeadersTable = document.getElementById('responseHeadersTable');
+  const requestHeadersTable = document.getElementById('requestHeadersTable');
+  const responseHeadersCount = document.getElementById('responseHeadersCount');
+  const requestHeadersCount = document.getElementById('requestHeadersCount');
+  const drawerTimingInfo = document.getElementById('drawerTimingInfo');
+
+  let activeRequest = null;
+  let selectedRowEl = null;
+
+  // Toast Container
+  const toastContainer = document.getElementById('toastContainer');
+
   /* -------------------------------------------------------------------------- */
   /* Real-time Clock                                                            */
   /* -------------------------------------------------------------------------- */
@@ -95,6 +123,59 @@
   }
   setInterval(updateClock, 1000);
   updateClock();
+
+  /* -------------------------------------------------------------------------- */
+  /* Toast Notifications                                                        */
+  /* -------------------------------------------------------------------------- */
+  function showToast(message, type = 'info', duration = 4000) {
+    if (!toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${sanitizeClass(type)}`;
+
+    const iconMap = {
+      warning: '⚠️',
+      error: '❌',
+      info: 'ℹ️',
+      success: '✅'
+    };
+
+    const iconSpan = document.createElement('span');
+    iconSpan.style.fontSize = '14px';
+    iconSpan.textContent = iconMap[type] || 'ℹ️';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'toast-content';
+    contentDiv.textContent = message;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Fechar notificação');
+    closeBtn.addEventListener('click', () => dismissToast(toast));
+
+    toast.appendChild(iconSpan);
+    toast.appendChild(contentDiv);
+    toast.appendChild(closeBtn);
+
+    while (toastContainer.children.length >= 5) {
+      toastContainer.firstChild.remove();
+    }
+    toastContainer.appendChild(toast);
+
+    const timer = setTimeout(() => {
+      dismissToast(toast);
+    }, duration);
+
+    function dismissToast(el) {
+      clearTimeout(timer);
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(16px)';
+      setTimeout(() => {
+        if (el.parentNode) el.remove();
+      }, 200);
+    }
+  }
 
   /* -------------------------------------------------------------------------- */
   /* User Authentication / Session State (XSS-Safe DOM creation)                */
@@ -193,6 +274,7 @@
   /* Form & Audit Controls                                                      */
   /* -------------------------------------------------------------------------- */
   function resetDashboard() {
+    closeDrawer();
     requestsMap.clear();
     orderedRowIds.length = 0;
     pendingUpdates.clear();
@@ -218,35 +300,69 @@
     summaryFailedReqs.textContent = '0';
 
     progressBar.style.width = '0%';
+    auditStatusBanner.classList.remove('banner-error');
+    if (statusDot) statusDot.className = 'status-indicator-dot pulse';
+    if (btnRetry) btnRetry.classList.add('hidden');
   }
 
-  function setAuditingState(active) {
+  function setAuditingState(active, isError = false) {
     isAuditing = active;
     if (active) {
       btnAudit.classList.add('hidden');
       btnStop.classList.remove('hidden');
-      auditStatusBanner.classList.remove('hidden');
+      auditStatusBanner.classList.remove('hidden', 'banner-error');
+      if (statusDot) statusDot.className = 'status-indicator-dot pulse';
+      if (btnRetry) btnRetry.classList.add('hidden');
       auditStateLabel.textContent = 'Analisando...';
       auditStateLabel.style.color = 'var(--color-accent)';
     } else {
       btnAudit.classList.remove('hidden');
       btnStop.classList.add('hidden');
-      auditStateLabel.textContent = 'Concluído';
-      auditStateLabel.style.color = 'var(--color-good)';
+      if (isError) {
+        auditStateLabel.textContent = 'Erro no Carregamento';
+        auditStateLabel.style.color = 'var(--color-poor)';
+      } else {
+        auditStateLabel.textContent = 'Concluído';
+        auditStateLabel.style.color = 'var(--color-good)';
+      }
     }
   }
 
   async function triggerAudit(url) {
-    if (!url || !url.trim() || isAuditing) return;
+    if (!url || !url.trim()) {
+      showToast('Por favor, informe uma URL para analisar (ex: https://example.com)', 'warning');
+      urlInput.focus();
+      return;
+    }
+    if (isAuditing) return;
+
+    const trimmed = url.trim();
+    // Validate protocol scheme if provided
+    const schemeMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+    if (schemeMatch) {
+      const proto = schemeMatch[1].toLowerCase();
+      if (!['http', 'https'].includes(proto)) {
+        showToast(`Protocolo "${proto}:" não permitido. Utilize http:// ou https://`, 'error');
+        urlInput.focus();
+        return;
+      }
+    }
+
+    lastAuditedUrl = trimmed;
     resetDashboard();
     setAuditingState(true);
 
     if (window.electronAPI) {
       try {
-        await window.electronAPI.startAudit(url);
+        await window.electronAPI.startAudit(trimmed);
       } catch (err) {
-        setAuditingState(false);
-        statusMessage.textContent = 'Erro ao disparar auditoria: ' + (err.message || err);
+        setAuditingState(false, true);
+        const errMsg = err.message || String(err);
+        statusMessage.textContent = 'Erro ao disparar auditoria: ' + errMsg;
+        auditStatusBanner.classList.add('banner-error');
+        if (statusDot) statusDot.className = 'status-indicator-dot error';
+        if (btnRetry) btnRetry.classList.remove('hidden');
+        showToast(`Erro na auditoria: ${errMsg}`, 'error');
       }
     } else {
       console.warn('Electron API não disponível');
@@ -271,6 +387,15 @@
       setAuditingState(false);
       statusMessage.textContent = 'Auditoria interrompida pelo usuário.';
     });
+
+    if (btnRetry) {
+      btnRetry.addEventListener('click', () => {
+        const target = urlInput.value.trim() || lastAuditedUrl;
+        if (target) {
+          triggerAudit(target);
+        }
+      });
+    }
 
     document.querySelectorAll('.preset-tag').forEach(tag => {
       tag.addEventListener('click', () => {
@@ -383,6 +508,9 @@
         const oldestId = orderedRowIds.shift();
         const oldEntry = requestsMap.get(oldestId);
         if (oldEntry && oldEntry.rowEl && oldEntry.rowEl.parentNode) {
+          if (selectedRowEl === oldEntry.rowEl) {
+            closeDrawer();
+          }
           oldEntry.rowEl.remove();
         }
         requestsMap.delete(oldestId);
@@ -413,6 +541,11 @@
         </td>
       `;
 
+      row.addEventListener('click', () => {
+        const cur = requestsMap.get(req.id);
+        openDrawer(cur ? cur.req : req, row);
+      });
+
       networkTableBody.appendChild(row);
       entry = { rowEl: row, req };
       requestsMap.set(req.id, entry);
@@ -421,6 +554,9 @@
 
     // Update row contents
     entry.req = req;
+    if (activeRequest && (activeRequest.id === req.id || (Boolean(activeRequest.originalId) && activeRequest.originalId === req.originalId))) {
+      renderDrawerDetails(req);
+    }
     const row = entry.rowEl;
     const safeCat = sanitizeClass(req.category);
     row.dataset.category = safeCat;
@@ -523,6 +659,177 @@
   }
 
   /* -------------------------------------------------------------------------- */
+  /* Request Details Drawer & Inspection                                        */
+  /* -------------------------------------------------------------------------- */
+  function openDrawer(req, rowEl) {
+    if (!req) return;
+    activeRequest = req;
+
+    if (selectedRowEl) {
+      selectedRowEl.classList.remove('selected-row');
+    }
+    selectedRowEl = rowEl;
+    if (selectedRowEl) {
+      selectedRowEl.classList.add('selected-row');
+    }
+
+    renderDrawerDetails(req);
+
+    if (requestDrawer) requestDrawer.classList.remove('hidden');
+    if (drawerBackdrop) drawerBackdrop.classList.remove('hidden');
+  }
+
+  function closeDrawer() {
+    activeRequest = null;
+    if (requestDrawer) requestDrawer.classList.add('hidden');
+    if (drawerBackdrop) drawerBackdrop.classList.add('hidden');
+    if (selectedRowEl) {
+      selectedRowEl.classList.remove('selected-row');
+      selectedRowEl = null;
+    }
+  }
+
+  function renderDrawerDetails(req) {
+    if (!drawerMethod || !drawerTitle || !drawerGeneralInfo) return;
+
+    const safeMethod = sanitizeClass(req.method);
+    drawerMethod.textContent = req.method;
+    drawerMethod.className = `drawer-badge method-${safeMethod}`;
+    drawerTitle.textContent = req.url || 'Requisição';
+    drawerTitle.title = req.url || '';
+
+    // General Section
+    drawerGeneralInfo.innerHTML = '';
+    const statusDisplay = req.status === 'failed'
+      ? `Falha (${req.errorText || 'Erro de rede'})`
+      : (req.statusCode ? `${req.statusCode} ${req.statusText || ''}` : 'Pendente');
+
+    const generalFields = [
+      { key: 'URL da Requisição', val: req.url },
+      { key: 'Método HTTP', val: req.method },
+      { key: 'Código de Status', val: statusDisplay },
+      { key: 'Endereço Remoto', val: req.remoteIPAddress || 'Não informado' },
+      { key: 'Protocolo', val: req.protocol || 'Desconhecido' },
+      { key: 'Tipo de Recurso', val: `${(req.category || '').toUpperCase()} (${req.type || ''})` }
+    ];
+
+    for (const f of generalFields) {
+      const row = document.createElement('div');
+      row.className = 'drawer-info-row';
+      row.innerHTML = `<span class="drawer-info-key">${escapeHtml(f.key)}:</span><span class="drawer-info-val">${escapeHtml(String(f.val || ''))}</span>`;
+      drawerGeneralInfo.appendChild(row);
+    }
+
+    // Response Headers
+    renderHeadersList(responseHeadersTable, responseHeadersCount, req.responseHeaders);
+
+    // Request Headers
+    renderHeadersList(requestHeadersTable, requestHeadersCount, req.requestHeaders);
+
+    // Timing Tab Info
+    if (drawerTimingInfo) {
+      drawerTimingInfo.innerHTML = '';
+      const timingFields = [
+        { key: 'Duração Total', val: formatDuration(req.durationMs) },
+        { key: 'Tamanho Transferido', val: req.encodedDataLength > 0 ? formatBytes(req.encodedDataLength) : '0 B' },
+        { key: 'Tipo MIME', val: req.mimeType || 'Não especificado' },
+        { key: 'Iniciador', val: req.initiator || 'Desconhecido' },
+        { key: 'Timestamp de Início', val: req.startMonotonic > 0 ? `${req.startMonotonic.toFixed(3)}s` : '--' }
+      ];
+
+      for (const f of timingFields) {
+        const row = document.createElement('div');
+        row.className = 'drawer-info-row';
+        row.innerHTML = `<span class="drawer-info-key">${escapeHtml(f.key)}:</span><span class="drawer-info-val">${escapeHtml(String(f.val || ''))}</span>`;
+        drawerTimingInfo.appendChild(row);
+      }
+    }
+  }
+
+  function renderHeadersList(containerEl, countEl, headersObj) {
+    if (!containerEl) return;
+    containerEl.innerHTML = '';
+    const entries = (headersObj && typeof headersObj === 'object' && !Array.isArray(headersObj)) ? Object.entries(headersObj) : [];
+    if (countEl) countEl.textContent = entries.length;
+
+    if (entries.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-headers';
+      empty.textContent = 'Nenhum cabeçalho disponível para esta requisição.';
+      containerEl.appendChild(empty);
+      return;
+    }
+
+    for (const [key, val] of entries) {
+      const entryEl = document.createElement('div');
+      entryEl.className = 'header-entry';
+      const keySpan = document.createElement('span');
+      keySpan.className = 'header-name';
+      keySpan.textContent = String(key) + ':';
+      const valSpan = document.createElement('span');
+      valSpan.className = 'header-val';
+      valSpan.textContent = String(val);
+      entryEl.appendChild(keySpan);
+      entryEl.appendChild(valSpan);
+      containerEl.appendChild(entryEl);
+    }
+  }
+
+  function setupDrawerEvents() {
+    if (btnCloseDrawer) {
+      btnCloseDrawer.addEventListener('click', closeDrawer);
+    }
+    if (drawerBackdrop) {
+      drawerBackdrop.addEventListener('click', closeDrawer);
+    }
+    if (btnCopyUrl) {
+      btnCopyUrl.addEventListener('click', async () => {
+        if (!activeRequest || !activeRequest.url) {
+          showToast('URL vazia ou indisponível para cópia.', 'warning', 2500);
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(activeRequest.url);
+          showToast('URL copiada para a área de transferência!', 'success', 2500);
+        } catch (e) {
+          showToast('Não foi possível copiar a URL.', 'error', 2500);
+        }
+      });
+    }
+
+    // Drawer Tabs switching
+    document.querySelectorAll('.drawer-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const targetTab = tab.getAttribute('data-drawer-tab');
+        if (targetTab === 'headers') {
+          if (paneHeaders) paneHeaders.classList.remove('hidden');
+          if (paneTiming) paneTiming.classList.add('hidden');
+        } else {
+          if (paneHeaders) paneHeaders.classList.add('hidden');
+          if (paneTiming) paneTiming.classList.remove('hidden');
+        }
+      });
+    });
+
+    // Keyboard navigation (ESC closes modal or drawer)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (loginModal && !loginModal.classList.contains('hidden')) {
+          loginModal.classList.add('hidden');
+        } else if (requestDrawer && !requestDrawer.classList.contains('hidden')) {
+          if (e.target === searchFilter || e.target === urlInput) {
+            e.target.blur();
+            return;
+          }
+          closeDrawer();
+        }
+      }
+    });
+  }
+
+  /* -------------------------------------------------------------------------- */
   /* Electron IPC Listeners                                                     */
   /* -------------------------------------------------------------------------- */
   function setupIpcListeners() {
@@ -545,10 +852,16 @@
           summaryLoadTime.textContent = (data.totalLoadTime / 1000).toFixed(2) + ' s';
         }
       } else if (data.status === 'failed' || data.status === 'stopped') {
-        setAuditingState(false);
-        if (data.status === 'failed') {
-          auditStateLabel.textContent = 'Erro no Carregamento';
-          auditStateLabel.style.color = 'var(--color-poor)';
+        const isFail = data.status === 'failed';
+        setAuditingState(false, isFail);
+        if (isFail) {
+          auditStatusBanner.classList.add('banner-error');
+          if (statusDot) statusDot.className = 'status-indicator-dot error';
+          if (btnRetry) btnRetry.classList.remove('hidden');
+          const codeInfo = data.errorCode ? ` (${data.errorCode})` : '';
+          const errMsg = data.errorDescription || data.message || 'Falha de conexão';
+          statusMessage.textContent = `Falha no carregamento: ${errMsg}${codeInfo}`;
+          showToast(`Falha de conexão: ${errMsg}${codeInfo}`, 'error');
         }
       }
     });
@@ -590,9 +903,13 @@
     });
 
     window.electronAPI.onError((err) => {
-      setAuditingState(false);
+      setAuditingState(false, true);
       const msg = err ? (err.message || String(err)) : 'Erro desconhecido';
       statusMessage.textContent = `Erro: ${msg}`;
+      auditStatusBanner.classList.add('banner-error');
+      if (statusDot) statusDot.className = 'status-indicator-dot error';
+      if (btnRetry) btnRetry.classList.remove('hidden');
+      showToast(`Erro na auditoria: ${msg}`, 'error');
     });
   }
 
@@ -649,6 +966,7 @@
     setupAuthEvents();
     setupAuditControls();
     setupFilters();
+    setupDrawerEvents();
     setupIpcListeners();
   }
 

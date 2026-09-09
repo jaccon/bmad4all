@@ -244,8 +244,9 @@ class SiteAuditor {
         });
       });
 
-      wc.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-        if (this.isStoppedByUser) return;
+      wc.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        if (this.isStoppedByUser || errorCode === -3 || isMainFrame === false) return;
+        this.isRunning = false;
         this.emit('audit:status', {
           status: 'failed',
           url: validatedURL,

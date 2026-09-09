@@ -171,4 +171,53 @@ describe('NetworkTracker', () => {
     assert.equal(searchMatch.length, 1);
     assert.equal(searchMatch[0].id, '2');
   });
+
+  test('captures and preserves request and response headers, protocol and remote IP', () => {
+    const tracker = new NetworkTracker();
+
+    tracker.onRequestWillBeSent({
+      requestId: 'req-headers',
+      request: {
+        url: 'https://api.example.com/data',
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer secret-token'
+        }
+      },
+      type: 'XHR',
+      timestamp: 10.0
+    });
+
+    let item = tracker.getRequests()[0];
+    assert.deepEqual(item.requestHeaders, {
+      'Accept': 'application/json',
+      'Authorization': 'Bearer secret-token'
+    });
+    assert.deepEqual(item.responseHeaders, {});
+
+    tracker.onResponseReceived({
+      requestId: 'req-headers',
+      response: {
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-cache'
+        },
+        protocol: 'h2',
+        remoteIPAddress: '192.0.2.1'
+      },
+      type: 'XHR',
+      timestamp: 10.2
+    });
+
+    item = tracker.getRequests()[0];
+    assert.deepEqual(item.responseHeaders, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache'
+    });
+    assert.equal(item.protocol, 'h2');
+    assert.equal(item.remoteIPAddress, '192.0.2.1');
+  });
 });

@@ -84,9 +84,10 @@
 
       <!-- Live Audit Status Banner -->
       <div class="audit-status-banner hidden" id="auditStatusBanner">
-        <div class="status-indicator-dot pulse"></div>
+        <div class="status-indicator-dot pulse" id="statusDot"></div>
         <span class="status-message" id="statusMessage">Pronto para iniciar auditoria</span>
-        <div class="progress-bar-container">
+        <button type="button" class="btn btn-secondary btn-sm hidden" id="btnRetry">🔄 Tentar Novamente</button>
+        <div class="progress-bar-container" id="progressBarContainer">
           <div class="progress-bar-fill" id="progressBar"></div>
         </div>
       </div>
@@ -289,6 +290,70 @@
       </form>
     </div>
   </div>
+
+  <!-- Request Details Inspection Drawer -->
+  <aside class="request-drawer hidden" id="requestDrawer" aria-label="Detalhes da Requisição">
+    <div class="drawer-header">
+      <div class="drawer-title-group">
+        <span class="drawer-badge" id="drawerMethod">GET</span>
+        <h3 class="drawer-title" id="drawerTitle">Detalhes da Requisição</h3>
+      </div>
+      <div class="drawer-actions">
+        <button type="button" class="btn-clear drawer-btn-copy" id="btnCopyUrl" title="Copiar URL completa">📋 Copiar URL</button>
+        <button type="button" class="btn-close-modal" id="btnCloseDrawer" title="Fechar (Esc)">✕</button>
+      </div>
+    </div>
+
+    <div class="drawer-tabs">
+      <button class="drawer-tab active" data-drawer-tab="headers">Cabeçalhos (Headers)</button>
+      <button class="drawer-tab" data-drawer-tab="timing">Timing & Rede</button>
+    </div>
+
+    <div class="drawer-content">
+      <!-- Tab 1: Headers -->
+      <div class="drawer-tab-pane active" id="paneHeaders">
+        <!-- General Info Section -->
+        <div class="drawer-section">
+          <h4 class="drawer-section-title">Geral</h4>
+          <div class="drawer-info-grid" id="drawerGeneralInfo">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Response Headers Section -->
+        <div class="drawer-section">
+          <h4 class="drawer-section-title">Cabeçalhos de Resposta (<span id="responseHeadersCount">0</span>)</h4>
+          <div class="headers-table" id="responseHeadersTable">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Request Headers Section -->
+        <div class="drawer-section">
+          <h4 class="drawer-section-title">Cabeçalhos de Requisição (<span id="requestHeadersCount">0</span>)</h4>
+          <div class="headers-table" id="requestHeadersTable">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Timing & Connection -->
+      <div class="drawer-tab-pane hidden" id="paneTiming">
+        <div class="drawer-section">
+          <h4 class="drawer-section-title">Informações de Conexão & Performance</h4>
+          <div class="drawer-info-grid" id="drawerTimingInfo">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Drawer Backdrop Overlay -->
+  <div class="drawer-backdrop hidden" id="drawerBackdrop"></div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <script src="renderer.js"></script>
 </body>
