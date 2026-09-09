@@ -256,10 +256,11 @@ class NetworkTracker {
     return { ...this.stats };
   }
 
-  filter({ category = 'all', search = '', status = 'all', onlyApi = false, apiOrigin = '' } = {}) {
+  filter({ category = 'all', search = '', status = 'all', httpStatus = 'all', onlyApi = false, apiOrigin = '' } = {}) {
     const s = (search || '').toLowerCase().trim();
     const cat = (category || 'all').toLowerCase();
     const stat = (status || 'all').toLowerCase();
+    const httpStat = String(httpStatus || 'all').toLowerCase().trim();
 
     return this.getRequests().filter(req => {
       if (!req) return false;
@@ -273,10 +274,55 @@ class NetworkTracker {
         }
       }
       if (stat !== 'all' && req.status !== stat) return false;
+
+      // HTTP Status filter
+      if (httpStat !== 'all') {
+        const code = Number(req.statusCode) || 0;
+        if (httpStat === '2xx') {
+          if (code < 200 || code >= 300) return false;
+        } else if (httpStat === '3xx') {
+          if (code < 300 || code >= 400) return false;
+        } else if (httpStat === '4xx') {
+          if (code < 400 || code >= 500) return false;
+        } else if (httpStat === '5xx') {
+          if (code < 500 || code >= 600) return false;
+        } else if (httpStat === 'error') {
+          const isError = (code >= 400) || (req.status === 'failed');
+          if (!isError) return false;
+        } else if (httpStat === 'pending') {
+          if (req.status !== 'pending' && (code > 0 || req.status === 'failed')) return false;
+        } else if (!isNaN(Number(httpStat))) {
+          if (code !== Number(httpStat)) return false;
+        }
+      }
+
+      // Search filter
       if (s) {
+        // Special search syntax: status:... or status-code:...
+        const statusPrefixMatch = s.match(/^status(?:-code)?:([a-z0-9]+)$/);
+        if (statusPrefixMatch) {
+          const targetStatus = statusPrefixMatch[1];
+          const code = Number(req.statusCode) || 0;
+          if (targetStatus === '2xx') {
+            return code >= 200 && code < 300;
+          } else if (targetStatus === '3xx') {
+            return code >= 300 && code < 400;
+          } else if (targetStatus === '4xx') {
+            return code >= 400 && code < 500;
+          } else if (targetStatus === '5xx') {
+            return code >= 500 && code < 600;
+          } else if (targetStatus === 'error') {
+            return code >= 400 || req.status === 'failed';
+          } else if (!isNaN(Number(targetStatus))) {
+            return code === Number(targetStatus);
+          }
+          return false;
+        }
+
         const reqUrl = (req.url || '').toLowerCase();
         const reqMethod = (req.method || '').toLowerCase();
-        if (!reqUrl.includes(s) && !reqMethod.includes(s)) {
+        const reqStatusStr = String(req.statusCode || '');
+        if (!reqUrl.includes(s) && !reqMethod.includes(s) && reqStatusStr !== s) {
           return false;
         }
       }

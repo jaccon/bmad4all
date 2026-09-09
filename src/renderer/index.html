@@ -230,6 +230,18 @@
             <button class="filter-tab" data-filter="document">Doc <span class="tab-count" id="countDoc">0</span></button>
           </div>
 
+          <div class="status-filter-wrapper">
+            <select id="statusFilterSelect" class="status-filter-select" title="Filtrar por Código de Status HTTP">
+              <option value="all">Status: Todos</option>
+              <option value="2xx">🟢 2xx Sucesso</option>
+              <option value="3xx">🔵 3xx Redirect</option>
+              <option value="4xx">🟠 4xx Erro Cliente</option>
+              <option value="5xx">🔴 5xx Erro Servidor</option>
+              <option value="error">⚠️ Erros & Falhas</option>
+              <option value="pending">⏳ Pendente</option>
+            </select>
+          </div>
+
           <div class="api-filter-wrapper">
             <select id="apiOriginSelect" class="api-origin-select hidden" title="Separar requisições por API / Domínio">
               <option value="all">Todas as APIs</option>
@@ -238,7 +250,7 @@
 
           <div class="search-box">
             <span class="search-icon">🔍</span>
-            <input type="text" id="searchFilter" class="search-input" placeholder="Filtrar por URL, método, api...">
+            <input type="text" id="searchFilter" class="search-input" placeholder="Filtrar por URL, método, status...">
           </div>
         </div>
       </div>

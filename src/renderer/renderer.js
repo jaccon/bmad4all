@@ -10,8 +10,10 @@
   let isAuditing = false;
   let currentFilter = 'all';
   let currentApiOrigin = 'all';
+  let currentHttpStatus = 'all';
   let currentSearch = '';
   const detectedApiOrigins = new Map(); // origin -> count
+  const detectedStatusCodes = new Set(); // set of unique status codes observed
   const requestsMap = new Map(); // id -> { rowEl, req }
   const orderedRowIds = [];
   const MAX_DOM_ROWS = 500; // Cap DOM elements to prevent UI lag
@@ -63,6 +65,7 @@
   const searchFilter = document.getElementById('searchFilter');
   const filterTabsContainer = document.getElementById('filterTabs');
   const apiOriginSelect = document.getElementById('apiOriginSelect');
+  const statusFilterSelect = document.getElementById('statusFilterSelect');
 
   const countEls = {
     all: document.getElementById('countAll'),
@@ -308,6 +311,14 @@
     if (apiOriginSelect) {
       apiOriginSelect.innerHTML = '<option value="all">Todas as APIs</option>';
       apiOriginSelect.classList.add('hidden');
+    }
+
+    detectedStatusCodes.clear();
+    currentHttpStatus = 'all';
+    if (statusFilterSelect) {
+      statusFilterSelect.value = 'all';
+      const optGroup = statusFilterSelect.querySelector('optgroup[data-dynamic="true"]');
+      if (optGroup) optGroup.remove();
     }
 
     progressBar.style.width = '0%';
@@ -561,6 +572,8 @@
       row.dataset.method = safeMethod;
       row.dataset.isApi = req.isApi ? 'true' : 'false';
       row.dataset.apiOrigin = req.apiOrigin || '';
+      row.dataset.statusCode = String(req.statusCode || '');
+      row.dataset.status = String(req.status || '');
 
       row.innerHTML = `
         <td class="cell-status"><span class="status-pill status-pending">...</span></td>
@@ -601,9 +614,14 @@
     row.dataset.category = safeCat;
     row.dataset.isApi = req.isApi ? 'true' : 'false';
     row.dataset.apiOrigin = req.apiOrigin || '';
+    row.dataset.statusCode = String(req.statusCode || '');
+    row.dataset.status = String(req.status || '');
 
     if (req.isApi && req.apiOrigin) {
       trackApiOrigin(req.apiOrigin);
+    }
+    if (req.statusCode) {
+      trackHttpStatus(req.statusCode);
     }
 
     // Status Code
@@ -680,6 +698,49 @@
     }
   }
 
+  function trackHttpStatus(code) {
+    if (!code || !statusFilterSelect) return;
+    const num = Number(code);
+    if (isNaN(num) || num <= 0) return;
+    if (!detectedStatusCodes.has(num)) {
+      detectedStatusCodes.add(num);
+      rebuildStatusFilterDropdown();
+    }
+  }
+
+  function getStatusDescription(code) {
+    const map = {
+      200: 'OK', 201: 'Created', 204: 'No Content', 206: 'Partial Content',
+      301: 'Moved Permanently', 302: 'Found', 304: 'Not Modified', 307: 'Temp Redirect', 308: 'Perm Redirect',
+      400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 405: 'Method Not Allowed',
+      429: 'Too Many Requests', 500: 'Internal Error', 502: 'Bad Gateway', 503: 'Service Unavailable', 504: 'Gateway Timeout'
+    };
+    return map[code] || '';
+  }
+
+  function rebuildStatusFilterDropdown() {
+    if (!statusFilterSelect) return;
+    let optGroup = statusFilterSelect.querySelector('optgroup[data-dynamic="true"]');
+    if (!optGroup && detectedStatusCodes.size > 0) {
+      optGroup = document.createElement('optgroup');
+      optGroup.label = 'Códigos Detectados';
+      optGroup.dataset.dynamic = 'true';
+      statusFilterSelect.appendChild(optGroup);
+    }
+    if (optGroup) {
+      optGroup.innerHTML = '';
+      const sorted = Array.from(detectedStatusCodes).sort((a, b) => a - b);
+      sorted.forEach(code => {
+        const opt = document.createElement('option');
+        opt.value = String(code);
+        const desc = getStatusDescription(code);
+        opt.textContent = desc ? `${code} (${desc})` : String(code);
+        if (String(code) === currentHttpStatus) opt.selected = true;
+        optGroup.appendChild(opt);
+      });
+    }
+  }
+
   function updateStats(stats) {
     if (!stats) return;
 
@@ -710,6 +771,8 @@
     const method = row.dataset.method || '';
     const isApi = row.dataset.isApi === 'true';
     const apiOrigin = row.dataset.apiOrigin || '';
+    const statusCode = Number(row.dataset.statusCode) || 0;
+    const reqStatus = row.dataset.status || '';
 
     let matchesFilter = true;
     if (currentFilter === 'all') {
@@ -725,16 +788,59 @@
       matchesApiOrigin = (isApi && apiOrigin === currentApiOrigin);
     }
 
+    let matchesHttpStatus = true;
+    if (currentHttpStatus !== 'all') {
+      if (currentHttpStatus === '2xx') {
+        matchesHttpStatus = (statusCode >= 200 && statusCode < 300);
+      } else if (currentHttpStatus === '3xx') {
+        matchesHttpStatus = (statusCode >= 300 && statusCode < 400);
+      } else if (currentHttpStatus === '4xx') {
+        matchesHttpStatus = (statusCode >= 400 && statusCode < 500);
+      } else if (currentHttpStatus === '5xx') {
+        matchesHttpStatus = (statusCode >= 500 && statusCode < 600);
+      } else if (currentHttpStatus === 'error') {
+        matchesHttpStatus = (statusCode >= 400 || reqStatus === 'failed');
+      } else if (currentHttpStatus === 'pending') {
+        matchesHttpStatus = (reqStatus === 'pending' || (!statusCode && reqStatus !== 'failed'));
+      } else if (!isNaN(Number(currentHttpStatus))) {
+        matchesHttpStatus = (statusCode === Number(currentHttpStatus));
+      }
+    }
+
     let matchesSearch = true;
     if (currentSearch) {
       if (currentSearch === 'api' || currentSearch === 'api:') {
         matchesSearch = isApi;
       } else {
-        matchesSearch = url.includes(currentSearch) || method.includes(currentSearch) || apiOrigin.toLowerCase().includes(currentSearch);
+        const statusPrefixMatch = currentSearch.match(/^status(?:-code)?:([a-z0-9]+)$/);
+        if (statusPrefixMatch) {
+          const targetStatus = statusPrefixMatch[1];
+          if (targetStatus === '2xx') {
+            matchesSearch = (statusCode >= 200 && statusCode < 300);
+          } else if (targetStatus === '3xx') {
+            matchesSearch = (statusCode >= 300 && statusCode < 400);
+          } else if (targetStatus === '4xx') {
+            matchesSearch = (statusCode >= 400 && statusCode < 500);
+          } else if (targetStatus === '5xx') {
+            matchesSearch = (statusCode >= 500 && statusCode < 600);
+          } else if (targetStatus === 'error') {
+            matchesSearch = (statusCode >= 400 || reqStatus === 'failed');
+          } else if (!isNaN(Number(targetStatus))) {
+            matchesSearch = (statusCode === Number(targetStatus));
+          } else {
+            matchesSearch = false;
+          }
+        } else {
+          const codeStr = String(row.dataset.statusCode || '');
+          matchesSearch = url.includes(currentSearch) ||
+                          method.includes(currentSearch) ||
+                          apiOrigin.toLowerCase().includes(currentSearch) ||
+                          codeStr === currentSearch;
+        }
       }
     }
 
-    if (matchesFilter && matchesApiOrigin && matchesSearch) {
+    if (matchesFilter && matchesApiOrigin && matchesHttpStatus && matchesSearch) {
       row.classList.remove('hidden');
     } else {
       row.classList.add('hidden');
@@ -755,6 +861,13 @@
       currentFilter = tab.getAttribute('data-filter');
       applyFiltersAll();
     });
+
+    if (statusFilterSelect) {
+      statusFilterSelect.addEventListener('change', (e) => {
+        currentHttpStatus = e.target.value;
+        applyFiltersAll();
+      });
+    }
 
     if (apiOriginSelect) {
       apiOriginSelect.addEventListener('change', (e) => {

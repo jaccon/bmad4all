@@ -310,4 +310,84 @@ describe('NetworkTracker', () => {
     assert.equal(githubRequests.length, 1);
     assert.equal(githubRequests[0].id, 'req-graphql');
   });
+
+  test('tracks and filters requests by HTTP status code and ranges', () => {
+    const tracker = new NetworkTracker();
+
+    // 1. 200 OK
+    tracker.onRequestWillBeSent({ requestId: 'r-200', request: { url: 'https://site.com/home', method: 'GET' } });
+    tracker.onResponseReceived({ requestId: 'r-200', response: { status: 200, statusText: 'OK' } });
+    tracker.onLoadingFinished({ requestId: 'r-200' });
+
+    // 2. 201 Created
+    tracker.onRequestWillBeSent({ requestId: 'r-201', request: { url: 'https://site.com/api/items', method: 'POST' } });
+    tracker.onResponseReceived({ requestId: 'r-201', response: { status: 201, statusText: 'Created' } });
+    tracker.onLoadingFinished({ requestId: 'r-201' });
+
+    // 3. 301 Redirect
+    tracker.onRequestWillBeSent({ requestId: 'r-301', request: { url: 'https://site.com/old', method: 'GET' } });
+    tracker.onResponseReceived({ requestId: 'r-301', response: { status: 301, statusText: 'Moved' } });
+    tracker.onLoadingFinished({ requestId: 'r-301' });
+
+    // 4. 404 Not Found
+    tracker.onRequestWillBeSent({ requestId: 'r-404', request: { url: 'https://site.com/missing', method: 'GET' } });
+    tracker.onResponseReceived({ requestId: 'r-404', response: { status: 404, statusText: 'Not Found' } });
+    tracker.onLoadingFinished({ requestId: 'r-404' });
+
+    // 5. 500 Server Error
+    tracker.onRequestWillBeSent({ requestId: 'r-500', request: { url: 'https://site.com/api/crash', method: 'POST' } });
+    tracker.onResponseReceived({ requestId: 'r-500', response: { status: 500, statusText: 'Internal Error' } });
+    tracker.onLoadingFinished({ requestId: 'r-500' });
+
+    // 6. Network failure
+    tracker.onRequestWillBeSent({ requestId: 'r-failed', request: { url: 'https://site.com/timeout', method: 'GET' } });
+    tracker.onLoadingFailed({ requestId: 'r-failed', errorText: 'net::ERR_CONNECTION_TIMED_OUT' });
+
+    // 7. Pending request
+    tracker.onRequestWillBeSent({ requestId: 'r-pending', request: { url: 'https://site.com/slow', method: 'GET' } });
+
+    // Test 2xx
+    const res2xx = tracker.filter({ httpStatus: '2xx' });
+    assert.deepEqual(res2xx.map(r => r.id), ['r-200', 'r-201']);
+
+    // Test 3xx
+    const res3xx = tracker.filter({ httpStatus: '3xx' });
+    assert.deepEqual(res3xx.map(r => r.id), ['r-301']);
+
+    // Test 4xx
+    const res4xx = tracker.filter({ httpStatus: '4xx' });
+    assert.deepEqual(res4xx.map(r => r.id), ['r-404']);
+
+    // Test 5xx
+    const res5xx = tracker.filter({ httpStatus: '5xx' });
+    assert.deepEqual(res5xx.map(r => r.id), ['r-500']);
+
+    // Test errors (4xx, 5xx, failed)
+    const resErrors = tracker.filter({ httpStatus: 'error' });
+    assert.deepEqual(resErrors.map(r => r.id), ['r-404', 'r-500', 'r-failed']);
+
+    // Test pending
+    const resPending = tracker.filter({ httpStatus: 'pending' });
+    assert.deepEqual(resPending.map(r => r.id), ['r-pending']);
+
+    // Test exact status code
+    const resExact404 = tracker.filter({ httpStatus: 404 });
+    assert.deepEqual(resExact404.map(r => r.id), ['r-404']);
+
+    const resExact201Str = tracker.filter({ httpStatus: '201' });
+    assert.deepEqual(resExact201Str.map(r => r.id), ['r-201']);
+
+    // Test search filter by status
+    const searchStatus404 = tracker.filter({ search: 'status:404' });
+    assert.deepEqual(searchStatus404.map(r => r.id), ['r-404']);
+
+    const searchStatus5xx = tracker.filter({ search: 'status:5xx' });
+    assert.deepEqual(searchStatus5xx.map(r => r.id), ['r-500']);
+
+    const searchStatusError = tracker.filter({ search: 'status:error' });
+    assert.deepEqual(searchStatusError.map(r => r.id), ['r-404', 'r-500', 'r-failed']);
+
+    const searchRawCode = tracker.filter({ search: '500' });
+    assert.deepEqual(searchRawCode.map(r => r.id), ['r-500']);
+  });
 });

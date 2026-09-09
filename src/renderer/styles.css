@@ -823,6 +823,45 @@ button,
   cursor: text !important;
 }
 
+/* Status Filter Select */
+.status-filter-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.status-filter-select {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-card);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 8px;
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: pointer;
+  max-width: 175px;
+  transition: all 0.15s ease;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-app-region: no-drag !important;
+}
+
+.status-filter-select:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.status-filter-select:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.status-filter-select option,
+.status-filter-select optgroup {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
 /* API Separator Select */
 .api-filter-wrapper {
   display: flex;
