@@ -1,7 +1,7 @@
 {
-  "name": "electron-pagespeed-network-monitor",
+  "name": "url-inspector",
   "version": "1.0.0",
-  "description": "Desktop Application in Electron with Dark Mode for real-time Network and PageSpeed/Core Web Vitals monitoring",
+  "description": "Desktop Application in Electron with Dark Mode for URL inspection, real-time Network and PageSpeed/Core Web Vitals monitoring",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",

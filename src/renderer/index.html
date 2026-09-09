@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:;">
-  <title>PageSpeed & Network Monitor</title>
+  <title>URL Inspector</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,7 +18,7 @@
   <header class="app-header">
     <div class="header-brand">
       <div class="brand-text">
-        <h1>PageSpeed <span class="accent-text">& Network</span></h1>
+        <h1>URL <span class="accent-text">Inspector</span></h1>
         <span class="badge-version">v1.0 • Desktop</span>
       </div>
     </div>
@@ -72,7 +72,7 @@
         </div>
 
         <button type="submit" class="btn btn-primary" id="btnAudit">
-          <span id="auditBtnText">Start Audit</span>
+          <span id="auditBtnText">Start Inspect</span>
         </button>
 
         <button type="button" class="btn btn-danger hidden" id="btnStop">
@@ -365,7 +365,7 @@
               <td colspan="7">
                 <div class="empty-state">
                   <div class="empty-title">No requests recorded yet</div>
-                  <div class="empty-desc">Enter a target URL above and click 'Start Audit' to monitor API calls and network waterfall in real time.</div>
+                  <div class="empty-desc">Enter a target URL above and click 'Start Inspect' to monitor API calls and network waterfall in real time.</div>
                 </div>
               </td>
             </tr>

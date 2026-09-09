@@ -577,7 +577,7 @@
   function setAuditingState(active, isError = false) {
     isAuditing = active;
     if (active) {
-      auditBtnText.textContent = 'Analyzing...';
+      auditBtnText.textContent = 'Inspecting...';
       btnAudit.disabled = true;
       btnAudit.classList.add('btn-auditing');
       btnStop.classList.remove('hidden');
@@ -585,10 +585,10 @@
       auditStatusBanner.classList.remove('hidden', 'banner-error');
       if (statusDot) statusDot.className = 'status-indicator-dot pulse';
       progressBar.style.width = '10%';
-      auditStateLabel.textContent = 'Auditing';
+      auditStateLabel.textContent = 'Inspecting';
       auditStateLabel.style.color = 'var(--color-accent)';
     } else {
-      auditBtnText.textContent = 'Start Audit';
+      auditBtnText.textContent = 'Start Inspect';
       btnAudit.disabled = false;
       btnAudit.classList.remove('btn-auditing');
       btnStop.classList.add('hidden');
@@ -660,13 +660,30 @@
     }
   }
 
+  function triggerBounceEffect(el) {
+    if (!el) return;
+    el.classList.remove('btn-bounce-blue');
+    void el.offsetWidth; // force DOM reflow
+    el.classList.add('btn-bounce-blue');
+    setTimeout(() => {
+      el.classList.remove('btn-bounce-blue');
+    }, 520);
+  }
+
   function setupAuditControls() {
     if (!auditForm) return;
 
     auditForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      triggerBounceEffect(btnAudit);
       triggerAudit(urlInput.value);
     });
+
+    if (btnAudit) {
+      btnAudit.addEventListener('click', () => {
+        triggerBounceEffect(btnAudit);
+      });
+    }
 
     if (btnClearUrl) {
       btnClearUrl.addEventListener('click', () => {
@@ -1197,7 +1214,7 @@
       } else if (requestsMap.size === 0) {
         emptyStateRow.classList.remove('hidden');
         emptyStateRow.querySelector('.empty-title').textContent = 'No requests recorded yet';
-        emptyStateRow.querySelector('.empty-desc').textContent = 'Enter a target URL above and click Start Audit to monitor API calls and network waterfall in real time.';
+        emptyStateRow.querySelector('.empty-desc').textContent = 'Enter a target URL above and click Start Inspect to monitor API calls and network waterfall in real time.';
       } else {
         emptyStateRow.classList.add('hidden');
       }

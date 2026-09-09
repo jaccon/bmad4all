@@ -30,7 +30,7 @@ function createMainWindow() {
     minWidth: 1080,
     minHeight: 700,
     backgroundColor: '#000000',
-    title: 'PageSpeed & Network Monitor',
+    title: 'URL Inspector',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
