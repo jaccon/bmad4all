@@ -8,7 +8,9 @@
     "test": "node --test tests/",
     "check": "node --check src/main/main.js src/main/auditor.js src/preload/preload.js src/renderer/renderer.js",
     "build:mac": "electron-builder --mac --publish never",
-    "build:clean": "rm -rf dist && electron-builder --mac --publish never",
+    "build:win": "electron-builder --win --publish never",
+    "build:all": "electron-builder --mac --win --publish never",
+    "build:clean": "rm -rf dist && electron-builder --mac --win --publish never",
     "build:mac:dir": "electron-builder --mac --dir --publish never",
     "pack": "electron-builder --dir"
   },
@@ -42,6 +44,29 @@
           ]
         }
       ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     }
   },
   "keywords": [
