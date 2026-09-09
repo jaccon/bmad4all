@@ -390,4 +390,66 @@ describe('NetworkTracker', () => {
     const searchRawCode = tracker.filter({ search: '500' });
     assert.deepEqual(searchRawCode.map(r => r.id), ['r-500']);
   });
+
+  test('captures network timing breakdown, decoded body size, and duration', () => {
+    const tracker = new NetworkTracker();
+
+    tracker.onRequestWillBeSent({
+      requestId: 'req-timing-1',
+      request: { url: 'https://site.com/data.json', method: 'GET' },
+      type: 'Fetch',
+      timestamp: 100.0
+    });
+
+    tracker.onResponseReceived({
+      requestId: 'req-timing-1',
+      response: {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'content-length': '1024' },
+        timing: {
+          requestTime: 100.0,
+          dnsStart: 2.0,
+          dnsEnd: 15.0,
+          connectStart: 15.0,
+          connectEnd: 45.0,
+          sslStart: 25.0,
+          sslEnd: 45.0,
+          sendStart: 46.0,
+          sendEnd: 48.0,
+          receiveHeadersEnd: 95.0
+        },
+        encodedDataLength: 512,
+        fromDiskCache: false,
+        remotePort: 443
+      },
+      type: 'Fetch',
+      timestamp: 100.1
+    });
+
+    tracker.onDataReceived({
+      requestId: 'req-timing-1',
+      dataLength: 1024,
+      encodedDataLength: 512,
+      timestamp: 100.12
+    });
+
+    tracker.onLoadingFinished({
+      requestId: 'req-timing-1',
+      encodedDataLength: 512,
+      timestamp: 100.15
+    });
+
+    const item = tracker.getRequests()[0];
+    assert.ok(item.timing, 'Timing should be preserved');
+    assert.equal(item.timing.dnsEnd, 15.0);
+    assert.equal(item.timing.sslEnd, 45.0);
+    assert.equal(item.timing.receiveHeadersEnd, 95.0);
+    assert.equal(item.dataLength, 1024, 'Decoded body size should be 1024');
+    assert.equal(item.encodedDataLength, 512);
+    assert.ok(item.durationMs >= 150, 'Duration should reflect finish timestamp');
+    assert.equal(item.duration, item.durationMs);
+    assert.equal(item.remotePort, 443);
+  });
 });
+

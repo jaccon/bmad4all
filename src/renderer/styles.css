@@ -536,7 +536,7 @@ button,
 /* Vitals Grid */
 .vitals-grid {
   display: grid;
-  grid-template-columns: 180px repeat(5, 1fr) 210px;
+  grid-template-columns: 200px 180px repeat(4, 1fr) 210px;
   gap: 10px;
 }
 

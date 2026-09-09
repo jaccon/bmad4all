@@ -87,8 +87,15 @@ class NetworkTracker {
       status: 'pending',
       startMonotonic: typeof timestamp === 'number' ? timestamp : 0,
       wallTime: typeof wallTime === 'number' ? wallTime : Date.now() / 1000,
+      duration: 0,
       durationMs: 0,
       encodedDataLength: 0,
+      dataLength: 0,
+      timing: null,
+      fromDiskCache: false,
+      fromServiceWorker: false,
+      remotePort: null,
+      ttfbMs: 0,
       errorText: null,
       initiator: params.initiator ? params.initiator.type : null,
       requestHeaders: (request.headers && typeof request.headers === 'object' && !Array.isArray(request.headers)) ? { ...request.headers } : {},
@@ -148,6 +155,28 @@ class NetworkTracker {
     if (response.remoteIPAddress) {
       record.remoteIPAddress = response.remoteIPAddress;
     }
+    if (response.remotePort) {
+      record.remotePort = response.remotePort;
+    }
+    if (response.fromDiskCache) {
+      record.fromDiskCache = true;
+    }
+    if (response.fromServiceWorker) {
+      record.fromServiceWorker = true;
+    }
+    if (response.timing && typeof response.timing === 'object') {
+      record.timing = { ...response.timing };
+    }
+
+    if (response.headers) {
+      const cl = response.headers['content-length'] || response.headers['Content-Length'];
+      if (cl) {
+        const num = parseInt(cl, 10);
+        if (!isNaN(num) && num > 0) {
+          record.contentLength = num;
+        }
+      }
+    }
 
     if (typeof response.encodedDataLength === 'number' && !isNaN(response.encodedDataLength) && response.encodedDataLength > 0) {
       const added = Math.max(0, response.encodedDataLength - record.encodedDataLength);
@@ -176,7 +205,10 @@ class NetworkTracker {
     }
 
     if (timestamp && record.startMonotonic > 0) {
-      record.durationMs = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      const d = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      record.durationMs = d;
+      record.duration = d;
+      if (!record.ttfbMs) record.ttfbMs = d;
     }
 
     return record;
@@ -187,6 +219,10 @@ class NetworkTracker {
     const { requestId, dataLength, encodedDataLength, timestamp } = params;
     const record = this.requests.get(requestId);
     if (!record) return null;
+
+    if (typeof dataLength === 'number' && !isNaN(dataLength) && dataLength > 0) {
+      record.dataLength = (record.dataLength || 0) + dataLength;
+    }
 
     const len = (typeof encodedDataLength === 'number' && !isNaN(encodedDataLength) && encodedDataLength > 0)
       ? encodedDataLength
@@ -199,7 +235,9 @@ class NetworkTracker {
     }
 
     if (timestamp && record.startMonotonic > 0) {
-      record.durationMs = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      const d = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      record.durationMs = d;
+      record.duration = d;
     }
 
     return record;
@@ -223,7 +261,13 @@ class NetworkTracker {
     }
 
     if (timestamp && record.startMonotonic > 0) {
-      record.durationMs = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      const d = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      record.durationMs = d;
+      record.duration = d;
+    }
+
+    if (!record.dataLength) {
+      record.dataLength = record.contentLength || record.encodedDataLength || 0;
     }
 
     return record;
@@ -242,7 +286,9 @@ class NetworkTracker {
     record.errorText = errorText || 'Failed';
 
     if (timestamp && record.startMonotonic > 0) {
-      record.durationMs = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      const d = Math.max(0, Math.round((timestamp - record.startMonotonic) * 1000));
+      record.durationMs = d;
+      record.duration = d;
     }
 
     return record;

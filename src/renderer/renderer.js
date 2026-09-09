@@ -591,6 +591,14 @@
     resetStateForAudit();
     setAuditingState(true);
 
+    // Measure tester bandwidth before calculating site throughput if not yet measured
+    if (clientSpeedMbps === 0) {
+      statusMessage.textContent = 'Measuring tester connection bandwidth...';
+      try {
+        await runClientSpeedProbe();
+      } catch (e) {}
+    }
+
     const throttling = selectThrottling ? selectThrottling.value : 'none';
     currentThrottlingProfile = throttling;
 
@@ -1328,18 +1336,87 @@
       }
     }
 
-    // Timing & Connection
+    // Timing & Connection Breakdown
     if (drawerTimingInfo) {
       drawerTimingInfo.innerHTML = '';
       const timing = req.timing || {};
+      const duration = (typeof req.duration === 'number' && req.duration > 0)
+        ? req.duration
+        : ((typeof req.durationMs === 'number' && req.durationMs > 0) ? req.durationMs : 0);
+      const encoded = req.encodedDataLength || req.bodySize || 0;
+      const decoded = req.dataLength || req.contentLength || (encoded > 0 ? encoded : 0);
+
+      let dnsVal = '--';
+      if (typeof timing.dnsStart === 'number' && typeof timing.dnsEnd === 'number' && timing.dnsEnd >= 0) {
+        if (timing.dnsStart >= 0) {
+          dnsVal = `${Math.max(0, Math.round(timing.dnsEnd - timing.dnsStart))} ms`;
+        } else {
+          dnsVal = 'Reused connection (0 ms)';
+        }
+      } else if (req.fromDiskCache) {
+        dnsVal = 'Cached (0 ms)';
+      }
+
+      let connectVal = '--';
+      if (typeof timing.connectStart === 'number' && typeof timing.connectEnd === 'number' && timing.connectEnd >= 0) {
+        if (timing.connectStart >= 0) {
+          connectVal = `${Math.max(0, Math.round(timing.connectEnd - timing.connectStart))} ms`;
+        } else {
+          connectVal = 'Reused connection (0 ms)';
+        }
+      } else if (req.fromDiskCache) {
+        connectVal = 'Cached (0 ms)';
+      }
+
+      let sslVal = '--';
+      if (typeof timing.sslStart === 'number' && typeof timing.sslEnd === 'number' && timing.sslEnd >= 0 && timing.sslStart >= 0) {
+        sslVal = `${Math.max(0, Math.round(timing.sslEnd - timing.sslStart))} ms`;
+      } else if (req.protocol && (req.protocol.includes('h2') || req.protocol.includes('h3') || req.protocol.includes('https'))) {
+        sslVal = (connectVal !== '--') ? 'Included in connect' : '--';
+      } else if (req.fromDiskCache) {
+        sslVal = 'Cached (0 ms)';
+      } else {
+        sslVal = 'N/A (Plain HTTP)';
+      }
+
+      let ttfbVal = '--';
+      if (typeof timing.receiveHeadersEnd === 'number' && timing.receiveHeadersEnd >= 0) {
+        const sendRef = (typeof timing.sendEnd === 'number' && timing.sendEnd >= 0)
+          ? timing.sendEnd
+          : ((typeof timing.sendStart === 'number' && timing.sendStart >= 0) ? timing.sendStart : 0);
+        ttfbVal = `${Math.max(0, Math.round(timing.receiveHeadersEnd - sendRef))} ms`;
+      } else if (typeof req.ttfbMs === 'number' && req.ttfbMs > 0) {
+        ttfbVal = `${Math.round(req.ttfbMs)} ms`;
+      } else if (duration > 0) {
+        ttfbVal = `${Math.round(duration)} ms`;
+      }
+
+      let downloadVal = '--';
+      if (duration > 0 && typeof timing.receiveHeadersEnd === 'number' && timing.receiveHeadersEnd > 0) {
+        downloadVal = `${Math.max(0, Math.round(duration - timing.receiveHeadersEnd))} ms`;
+      } else if (duration > 0) {
+        downloadVal = '< 1 ms';
+      }
+
+      let durationVal = '--';
+      if (duration > 0) {
+        durationVal = formatDuration(duration);
+      } else if (req.status === 'completed') {
+        durationVal = '< 1 ms';
+      } else if (req.status === 'pending') {
+        durationVal = 'In progress...';
+      }
+
       const timingPairs = [
-        ['Total Duration', req.duration ? formatDuration(req.duration) : '--'],
-        ['Encoded Data', req.encodedDataLength ? formatBytes(req.encodedDataLength) : '--'],
-        ['Decoded Body', req.dataLength ? formatBytes(req.dataLength) : '--'],
-        ['DNS Lookup', timing.dnsEnd && timing.dnsStart ? `${Math.round(timing.dnsEnd - timing.dnsStart)} ms` : '--'],
-        ['Initial Connection', timing.connectEnd && timing.connectStart ? `${Math.round(timing.connectEnd - timing.connectStart)} ms` : '--'],
-        ['SSL Handshake', timing.sslEnd && timing.sslStart ? `${Math.round(timing.sslEnd - timing.sslStart)} ms` : '--'],
-        ['TTFB (Waiting for server)', timing.receiveHeadersEnd && timing.sendEnd ? `${Math.round(timing.receiveHeadersEnd - timing.sendEnd)} ms` : '--']
+        ['Total Duration', durationVal],
+        ['Encoded (Over Wire)', encoded > 0 ? formatBytes(encoded) : (req.fromDiskCache ? '0 B (Disk Cache)' : '--')],
+        ['Decoded Body', decoded > 0 ? formatBytes(decoded) : (encoded > 0 ? formatBytes(encoded) : '--')],
+        ['Cache Status', req.fromDiskCache ? 'Served from Disk Cache' : (req.fromServiceWorker ? 'Service Worker' : 'Network Transfer')],
+        ['DNS Lookup', dnsVal],
+        ['Initial Connection', connectVal],
+        ['SSL Handshake', sslVal],
+        ['TTFB (Waiting for server)', ttfbVal],
+        ['Content Download', downloadVal]
       ];
 
       timingPairs.forEach(([key, val]) => {
@@ -1510,8 +1587,6 @@
     if (btnProbeSpeed) {
       btnProbeSpeed.addEventListener('click', runClientSpeedProbe);
     }
-    // Auto probe client speed shortly after start
-    setTimeout(runClientSpeedProbe, 1200);
 
     // Initial load of audit history
     loadAuditHistory();
