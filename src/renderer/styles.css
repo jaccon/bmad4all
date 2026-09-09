@@ -56,7 +56,28 @@ body.dark-theme {
   flex-direction: column;
   overflow: hidden;
   user-select: none;
+  -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Ensure all inputs and text areas are always selectable and editable in Electron */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-app-region: no-drag !important;
+  cursor: text !important;
+}
+
+button,
+.btn,
+.btn-clear,
+.filter-tab,
+.preset-tag {
+  -webkit-app-region: no-drag !important;
+  cursor: pointer;
 }
 
 /* macOS hiddenInset Titlebar drag region */
@@ -288,6 +309,10 @@ body.dark-theme {
   font-family: var(--font-mono);
   padding: 10px 0;
   outline: none;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-app-region: no-drag !important;
+  cursor: text !important;
 }
 
 .url-input::placeholder {
@@ -780,6 +805,10 @@ body.dark-theme {
   padding: 5px 0;
   width: 140px;
   outline: none;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-app-region: no-drag !important;
+  cursor: text !important;
 }
 
 /* Network Table */
@@ -1034,6 +1063,10 @@ body.dark-theme {
   color: var(--text-primary);
   font-size: 13px;
   outline: none;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-app-region: no-drag !important;
+  cursor: text !important;
 }
 
 .form-input:focus {

@@ -380,6 +380,15 @@
       urlInput.focus();
     });
 
+    const urlWrapper = document.querySelector('.url-input-wrapper');
+    if (urlWrapper) {
+      urlWrapper.addEventListener('click', (e) => {
+        if (e.target !== btnClearUrl && urlInput) {
+          urlInput.focus();
+        }
+      });
+    }
+
     btnStop.addEventListener('click', async () => {
       if (window.electronAPI) {
         await window.electronAPI.stopAudit();
